@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Company {
+  id   String @id @default(cuid())
+  name String
+
+  imageUrl String?
+
+  accessToken String? @unique
+  plan        String  @default("pilot")
+
+  mainCategory  String @default("Allgemein")
+  subCategory   String @default("Allgemein")
+  subCategories String @default("[]")
+
+  category    String
+  city        String
+  phone       String?
+  email       String?
+  website     String?
+  description String
+  tags        String @default("[]")
+  searchTerms String @default("[]")
+
+  ad    Advertisement?
+  leads Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Advertisement {
+  id          String @id @default(cuid())
+  title       String
+  description String
+  cta         String
+
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SearchLog {
+  id              String @id @default(cuid())
+  query           String
+  normalizedQuery String
+  resultCount     Int    @default(0)
+
+  createdAt DateTime @default(now())
+}
+
+model Lead {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  customerName  String
+  customerEmail String?
+  customerPhone String?
+  message       String
+  sourceQuery   String?
+  status        String  @default("new")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompanyInquiry {
+  id String @id @default(cuid())
+
+  companyName String
+  contactName String
+  email       String
+  phone       String?
+  website     String?
+  city        String
+
+  desiredPlan String @default("starter")
+
+  mainCategory  String @default("Allgemein")
+  subCategory   String @default("Allgemein")
+  subCategories String @default("[]")
+  category      String @default("Allgemein")
+
+  description String @default("")
+  tags        String @default("[]")
+  searchTerms String @default("[]")
+
+  adTitle       String?
+  adDescription String?
+  adCta         String?
+
+  message String
+  status  String @default("new")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Event {
+  id String @id @default(cuid())
+
+  title    String
+  imageUrl String?
+
+  organizerName String
+  category      String
+  plan          String @default("basic")
+
+  city         String
+  locationName String?
+  address      String?
+
+  description String
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  website   String?
+  ticketUrl String?
+
+  isActive       Boolean   @default(true)
+  highlightUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EventInquiry {
+  id String @id @default(cuid())
+
+  eventTitle    String
+  organizerName String
+  contactName   String
+  email         String
+  phone         String?
+  website       String?
+  city          String
+
+  desiredPlan String @default("highlight")
+
+  category     String   @default("Sonstiges")
+  locationName String?
+  eventDate    DateTime?
+
+  description String @default("")
+  tags        String @default("[]")
+
+  message String
+  status  String @default("new")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
