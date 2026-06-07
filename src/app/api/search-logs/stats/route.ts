@@ -82,3 +82,4 @@ export async function GET() {
     acquisitionOpportunities: acquisitionOpportunities.slice(0, 10),
   });
 }
+

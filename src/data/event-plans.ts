@@ -61,3 +61,4 @@ export function getEventPlanRank(plan: string | undefined) {
 export function isHighlightedEventPlan(plan: string | undefined) {
   return plan === "highlight" || plan === "premium";
 }
+

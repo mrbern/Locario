@@ -24,3 +24,4 @@ export type EventInquiry = {
   createdAt: string;
   updatedAt: string;
 };
+

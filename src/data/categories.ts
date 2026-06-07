@@ -237,3 +237,4 @@ export function findMainCategoryForSubCategory(subCategory: string) {
 
   return categoryGroup?.name ?? "";
 }
+

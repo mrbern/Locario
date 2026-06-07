@@ -1415,3 +1415,4 @@ function CompanyResultGrid({
     </div>
   );
 }
+

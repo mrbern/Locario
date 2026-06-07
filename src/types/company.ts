@@ -26,3 +26,4 @@ export type Company = {
   searchTerms: string[];
   ad?: CompanyAd;
 };
+

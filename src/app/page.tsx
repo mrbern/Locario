@@ -410,3 +410,4 @@ function BusinessCard({
     </article>
   );
 }
+

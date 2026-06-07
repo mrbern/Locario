@@ -107,3 +107,4 @@ export const config = {
     "/api/search-logs/:path*",
   ],
 };
+

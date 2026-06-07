@@ -165,7 +165,7 @@ export default function CompanyDetailPage({
 
     if (!shouldShowLeadForm(company)) {
       setLeadErrorMessage(
-        "Diese Firma kann im aktuellen Paket keine Neario-Anfragen empfangen. Bitte nutze die Kontaktangaben der Firma."
+        "Diese Firma kann im aktuellen Paket keine Locario-Anfragen empfangen. Bitte nutze die Kontaktangaben der Firma."
       );
       return;
     }
@@ -478,7 +478,7 @@ export default function CompanyDetailPage({
                 </h2>
 
                 <p className="mt-4 max-w-2xl text-slate-300">
-                  Stelle direkt eine Anfrage. Neario speichert den Kontakt als
+                  Stelle direkt eine Anfrage. Locario speichert den Kontakt als
                   Lead, damit die Firma später darauf reagieren kann.
                 </p>
 
@@ -569,11 +569,11 @@ export default function CompanyDetailPage({
                 </p>
 
                 <h2 className="mt-3 break-words text-3xl font-black tracking-tight">
-                  Diese Firma nimmt keine Neario-Anfragen entgegen
+                  Diese Firma nimmt keine Locario-Anfragen entgegen
                 </h2>
 
                 <p className="mt-4 max-w-2xl text-slate-300">
-                  Im Starter-Paket gibt es kein Neario-Leadformular und kein
+                  Im Starter-Paket gibt es kein Locario-Leadformular und kein
                   Partner-Dashboard. Nutze bitte die öffentlichen Kontaktdaten
                   der Firma.
                 </p>
@@ -670,12 +670,12 @@ export default function CompanyDetailPage({
               </div>
 
               <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                <p className="font-black text-cyan-100">Neario Hinweis</p>
+                <p className="font-black text-cyan-100">Locario Hinweis</p>
 
                 <p className="mt-2 text-sm text-slate-300">
                   {leadsVisible
-                    ? "Diese Firma kann über Neario Anfragen empfangen. Beschreibe möglichst konkret, was du suchst."
-                    : "Diese Firma ist über Neario sichtbar, empfängt aber im aktuellen Paket keine Neario-Anfragen. Nutze bitte Telefon, E-Mail oder Website."}
+                    ? "Diese Firma kann über Locario Anfragen empfangen. Beschreibe möglichst konkret, was du suchst."
+                    : "Diese Firma ist über Locario sichtbar, empfängt aber im aktuellen Paket keine Locario-Anfragen. Nutze bitte Telefon, E-Mail oder Website."}
                 </p>
               </div>
             </section>
@@ -735,3 +735,6 @@ function InputField({
     </div>
   );
 }
+
+
+

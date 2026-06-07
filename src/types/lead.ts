@@ -11,3 +11,4 @@ export type Lead = {
   createdAt: string;
   updatedAt: string;
 };
+

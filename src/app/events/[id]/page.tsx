@@ -7,9 +7,9 @@ import {
   getEventPlanLabel,
   getEventPlanPrice,
 } from "@/data/event-plans";
-import type { NearioEvent } from "@/types/event";
+import type { LocarioEvent } from "@/types/event";
 
-function eventHasImage(event: NearioEvent) {
+function eventHasImage(event: LocarioEvent) {
   return Boolean(event.imageUrl && event.imageUrl.trim());
 }
 
@@ -71,7 +71,7 @@ export default function EventDetailPage({
 }) {
   const { id } = React.use(params);
 
-  const [event, setEvent] = useState<NearioEvent | null>(null);
+  const [event, setEvent] = useState<LocarioEvent | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -96,7 +96,7 @@ export default function EventDetailPage({
         );
       }
 
-      const data = (await response.json()) as NearioEvent;
+      const data = (await response.json()) as LocarioEvent;
       setEvent(data);
     } catch (error) {
       setEvent(null);
@@ -291,7 +291,7 @@ export default function EventDetailPage({
 
               <p className="mt-4 text-slate-300">
                 Dieses Event wird von {event.organizerName} veranstaltet und auf
-                Neario regional sichtbar gemacht.
+                Locario regional sichtbar gemacht.
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -386,7 +386,7 @@ export default function EventDetailPage({
               </div>
 
               <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                <p className="font-black text-cyan-100">Neario Hinweis</p>
+                <p className="font-black text-cyan-100">Locario Hinweis</p>
 
                 <p className="mt-2 text-sm text-slate-300">
                   Prüfe vor dem Besuch die Angaben des Veranstalters, falls sich
@@ -422,3 +422,5 @@ function InfoBox({ title, value }: { title: string; value: string }) {
     </div>
   );
 }
+
+

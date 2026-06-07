@@ -26,3 +26,4 @@ export type LocarioEvent = {
   createdAt: string;
   updatedAt: string;
 };
+

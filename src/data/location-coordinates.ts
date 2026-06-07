@@ -141,3 +141,4 @@ export const locationCoordinates: Record<string, LocationCoordinate> = {
     longitude: 6.1432,
   },
 };
+

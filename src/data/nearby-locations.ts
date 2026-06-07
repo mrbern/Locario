@@ -55,3 +55,4 @@ export const nearbyLocations: Record<string, string[]> = {
     "zollikofen",
   ],
 };
+

@@ -109,3 +109,4 @@ export function hasCompanyPriorityPlacement(plan: string | undefined) {
 export function hasCompanyPremiumPlacement(plan: string | undefined) {
   return getCompanyPlan(plan).hasPremiumPlacement;
 }
+

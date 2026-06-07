@@ -35,3 +35,4 @@ export type CompanyInquiry = {
   createdAt: string;
   updatedAt: string;
 };
+

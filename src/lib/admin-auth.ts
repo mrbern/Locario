@@ -11,3 +11,4 @@ export function getAdminSessionToken() {
 export function isAdminLoginConfigured() {
   return Boolean(getAdminPassword() && getAdminSessionToken());
 }
+

@@ -501,7 +501,7 @@ export default function PartnerDashboardPage({
         <section className="relative mx-auto max-w-4xl">
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20">
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Neario Partner
+              Locario Partner
             </p>
 
             <h1 className="mt-3 text-4xl font-black tracking-tight">
@@ -546,7 +546,7 @@ export default function PartnerDashboardPage({
           <div>
             <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
-              Neario Partner-Dashboard
+              Locario Partner-Dashboard
             </div>
 
             <h1 className="mt-6 max-w-5xl text-5xl font-black tracking-tight md:text-7xl">
@@ -573,7 +573,7 @@ export default function PartnerDashboardPage({
 
             <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-300">
               Verwalte dein Firmenprofil, aktualisiere Kontaktdaten, ändere
-              dein Titelbild und bearbeite Kundenanfragen, die über Neario
+              dein Titelbild und bearbeite Kundenanfragen, die über Locario
               eingegangen sind.
             </p>
 
@@ -601,7 +601,7 @@ export default function PartnerDashboardPage({
             </p>
 
             <h2 className="mt-2 text-3xl font-black tracking-tight">
-              Deine Neario-Aktivität
+              Deine Locario-Aktivität
             </h2>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
@@ -660,7 +660,7 @@ export default function PartnerDashboardPage({
             </h2>
 
             <p className="mt-3 text-slate-400">
-              So wird dein Unternehmen aktuell auf Neario dargestellt.
+              So wird dein Unternehmen aktuell auf Locario dargestellt.
             </p>
 
             <div className="mt-6 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/50">
@@ -759,7 +759,7 @@ export default function PartnerDashboardPage({
             <p className="mt-3 text-slate-400">
               Kontaktdaten, Beschreibung, Titelbild und Werbung kannst du selbst
               bearbeiten. Name, Ort, Kategorien und Paket werden aktuell von
-              Neario verwaltet.
+              Locario verwaltet.
             </p>
 
             {profileSuccessMessage && (
@@ -870,7 +870,7 @@ export default function PartnerDashboardPage({
                   </p>
 
                   <p className="mt-4 text-sm text-amber-100">
-                    Wende dich an Neario, wenn du dein Paket erweitern möchtest.
+                    Wende dich an Locario, wenn du dein Paket erweitern möchtest.
                   </p>
                 </div>
               )}
@@ -900,7 +900,7 @@ export default function PartnerDashboardPage({
               </h2>
 
               <p className="mt-3 text-slate-400">
-                Diese Anfragen wurden über dein Neario-Firmenprofil gesendet.
+                Diese Anfragen wurden über dein Locario-Firmenprofil gesendet.
               </p>
             </div>
 
@@ -1329,3 +1329,6 @@ function SelectField({
     </div>
   );
 }
+
+
+

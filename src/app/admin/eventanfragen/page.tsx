@@ -869,3 +869,4 @@ function InfoBox({ title, value }: { title: string; value: string }) {
     </div>
   );
 }
+
