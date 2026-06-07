@@ -14,7 +14,7 @@ import {
   getEventPlanPrice,
   getEventPlanRank,
 } from "@/data/event-plans";
-import type { NearioEvent } from "@/types/event";
+import type { LocarioEvent } from "@/types/event";
 
 type EventForm = {
   title: string;
@@ -113,7 +113,7 @@ function formatDateTime(value: string) {
   });
 }
 
-function getEventSearchText(event: NearioEvent) {
+function getEventSearchText(event: LocarioEvent) {
   return normalizeText(
     [
       event.title,
@@ -130,11 +130,11 @@ function getEventSearchText(event: NearioEvent) {
   );
 }
 
-function eventHasImage(event: NearioEvent) {
+function eventHasImage(event: LocarioEvent) {
   return Boolean(event.imageUrl && event.imageUrl.trim());
 }
 
-function isHighlightedEvent(event: NearioEvent) {
+function isHighlightedEvent(event: LocarioEvent) {
   return event.plan === "highlight" || event.plan === "premium";
 }
 
@@ -151,7 +151,7 @@ function getPlanBadgeClassName(plan: string | undefined) {
 }
 
 export default function AdminEventsPage() {
-  const [events, setEvents] = useState<NearioEvent[]>([]);
+  const [events, setEvents] = useState<LocarioEvent[]>([]);
   const [form, setForm] = useState<EventForm>(emptyForm);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
@@ -222,7 +222,7 @@ export default function AdminEventsPage() {
         throw new Error("Events konnten nicht geladen werden.");
       }
 
-      const data = (await response.json()) as NearioEvent[];
+      const data = (await response.json()) as LocarioEvent[];
       setEvents(data);
     } catch {
       setErrorMessage("Events konnten nicht aus der Datenbank geladen werden.");
@@ -350,7 +350,7 @@ export default function AdminEventsPage() {
         );
       }
 
-      const savedEvent = (await response.json()) as NearioEvent;
+      const savedEvent = (await response.json()) as LocarioEvent;
 
       if (isEditing) {
         setEvents((currentEvents) =>
@@ -383,7 +383,7 @@ export default function AdminEventsPage() {
     }
   }
 
-  function startEditingEvent(event: NearioEvent) {
+  function startEditingEvent(event: LocarioEvent) {
     setEditingEventId(event.id);
 
     setForm({

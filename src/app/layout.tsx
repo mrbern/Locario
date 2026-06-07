@@ -4,9 +4,9 @@ import "./globals.css";
 import Header from "@/components/Header";
 
 export const metadata: Metadata = {
-  title: "Neario | Lokale Firmen & Events entdecken",
+  title: "Locario | Lokale Firmen & Events entdecken",
   description:
-    "Neario ist ein lokales Portal für regionale Firmen, KMUs, Dienstleister, Händler und Events.",
+    "Locario ist ein lokales Portal für regionale Firmen, KMUs, Dienstleister, Händler und Events.",
 };
 
 export default function RootLayout({
@@ -37,7 +37,7 @@ export default function RootLayout({
 
                   <div>
                     <p className="text-2xl font-black tracking-tight">
-                      Neario
+                      Locario
                     </p>
                     <p className="-mt-1 text-xs font-medium text-slate-400">
                       Lokale Firmen & Events
@@ -46,7 +46,7 @@ export default function RootLayout({
                 </Link>
 
                 <p className="mt-5 max-w-xl text-sm leading-7 text-slate-400">
-                  Neario verbindet lokale Suchanfragen mit passenden regionalen
+                  Locario verbindet lokale Suchanfragen mit passenden regionalen
                   Firmen, KMUs, Dienstleistern, Händlern und Events.
                 </p>
 
@@ -143,7 +143,7 @@ export default function RootLayout({
 
             <div className="mt-8 flex flex-col justify-between gap-4 border-t border-white/10 pt-6 text-sm text-slate-500 md:flex-row md:items-center">
               <p>
-                © {new Date().getFullYear()} Neario. Alle Rechte vorbehalten.
+                © {new Date().getFullYear()} Locario. Alle Rechte vorbehalten.
               </p>
 
               <p>

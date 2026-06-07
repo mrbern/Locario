@@ -131,7 +131,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message:
-          "Diese Firma kann im aktuellen Paket keine Neario-Anfragen empfangen. Bitte nutze die öffentlichen Kontaktangaben der Firma.",
+          "Diese Firma kann im aktuellen Paket keine Locario-Anfragen empfangen. Bitte nutze die öffentlichen Kontaktangaben der Firma.",
       },
       {
         status: 403,

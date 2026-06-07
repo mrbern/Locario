@@ -822,7 +822,7 @@ export default function SearchPage() {
     }
 
     const savedUserLocation = window.localStorage.getItem(
-      "neario-user-location"
+      "Locario-user-location"
     );
 
     if (savedUserLocation) {
@@ -837,7 +837,7 @@ export default function SearchPage() {
           setLocationMessage("Standortsortierung ist aktiv.");
         }
       } catch {
-        window.localStorage.removeItem("neario-user-location");
+        window.localStorage.removeItem("Locario-user-location");
       }
     }
 
@@ -1005,7 +1005,7 @@ export default function SearchPage() {
 
         setUserLocation(detectedLocation);
         window.localStorage.setItem(
-          "neario-user-location",
+          "Locario-user-location",
           JSON.stringify(detectedLocation)
         );
         setLocationMessage(
@@ -1029,7 +1029,7 @@ export default function SearchPage() {
 
   function clearCurrentLocation() {
     setUserLocation(null);
-    window.localStorage.removeItem("neario-user-location");
+    window.localStorage.removeItem("Locario-user-location");
     setLocationMessage("Standortsortierung wurde deaktiviert.");
   }
 
@@ -1046,7 +1046,7 @@ export default function SearchPage() {
           <div>
             <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
-              Neario Suche
+              Locario Suche
             </div>
 
             <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight md:text-7xl">
@@ -1057,7 +1057,7 @@ export default function SearchPage() {
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-              Suche nach Produkten, Dienstleistungen oder Firmen. Neario zeigt
+              Suche nach Produkten, Dienstleistungen oder Firmen. Locario zeigt
               fachlich passende Treffer im gesuchten Ort, in Nachbardörfern und
               optional nach deiner Nähe sortiert an.
             </p>
@@ -1234,13 +1234,13 @@ export default function SearchPage() {
                   </h2>
 
                   <p className="mt-4 text-slate-300">
-                    Neario speichert solche Suchanfragen. So erkennst du später,
+                    Locario speichert solche Suchanfragen. So erkennst du später,
                     welche Firmen oder Branchen in deiner Region gefragt sind.
                   </p>
 
                   <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-5">
                     <p className="font-bold text-cyan-100">
-                      Chance für Neario
+                      Chance für Locario
                     </p>
 
                     <p className="mt-2 text-sm text-slate-300">

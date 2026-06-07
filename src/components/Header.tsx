@@ -23,7 +23,7 @@ export default function Header() {
           </div>
 
           <div>
-            <p className="text-2xl font-black tracking-tight">Neario</p>
+            <p className="text-2xl font-black tracking-tight">Locario</p>
             <p className="-mt-1 hidden text-xs font-medium text-slate-400 sm:block">
               Lokale Firmen & Events
             </p>

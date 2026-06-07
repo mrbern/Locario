@@ -696,7 +696,7 @@ export default function AdminCompaniesPage() {
 
                 <p className="mt-2 text-sm text-slate-300">
                   Dieses Paket erstellt keinen Partner-Link, kein
-                  Business-Dashboard und keine Neario-Leadverwaltung. Leads und
+                  Business-Dashboard und keine Locario-Leadverwaltung. Leads und
                   Dashboard sind erst ab Pro verfügbar.
                 </p>
               </div>
@@ -710,7 +710,7 @@ export default function AdminCompaniesPage() {
 
                 <p className="mt-2 text-sm text-slate-300">
                   Dieses Paket erhält einen Partner-Link, ein Dashboard und kann
-                  Neario-Leads empfangen.
+                  Locario-Leads empfangen.
                 </p>
               </div>
             )}

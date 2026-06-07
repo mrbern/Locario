@@ -63,7 +63,7 @@ export default function HomePage() {
             </h1>
 
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-300 md:mt-7 md:text-lg md:leading-8">
-              Suche einfach nach dem, was du brauchst. Neario zeigt passende
+              Suche einfach nach dem, was du brauchst. Locario zeigt passende
               Anbieter aus deiner Region und Umgebung.
             </p>
 
@@ -169,7 +169,7 @@ export default function HomePage() {
 
                 <div className="rounded-[1.5rem] border border-white/10 bg-slate-950/60 p-5">
                   <p className="text-sm font-bold text-slate-300">
-                    Was Neario besser macht
+                    Was Locario besser macht
                   </p>
 
                   <div className="mt-4 grid gap-3">
@@ -193,7 +193,7 @@ export default function HomePage() {
           <ValueCard
             value="02"
             title="Regional passende Treffer"
-            description="Neario berücksichtigt Ort, Umgebung, Suchbegriffe und Leistungen."
+            description="Locario berücksichtigt Ort, Umgebung, Suchbegriffe und Leistungen."
           />
 
           <ValueCard
@@ -205,7 +205,7 @@ export default function HomePage() {
 
         <section className="mt-10 rounded-[2rem] border border-cyan-300/20 bg-cyan-300/10 p-6 text-center shadow-2xl shadow-cyan-950/20 md:hidden">
           <h2 className="text-2xl font-black tracking-tight">
-            Neario verbindet lokale Suche mit regionalen Firmen.
+            Locario verbindet lokale Suche mit regionalen Firmen.
           </h2>
 
           <p className="mt-3 text-sm text-slate-300">
@@ -241,7 +241,7 @@ export default function HomePage() {
               </h2>
 
               <p className="mt-5 text-slate-300">
-                Neario ist kein klassisches Branchenbuch. Firmen werden passend
+                Locario ist kein klassisches Branchenbuch. Firmen werden passend
                 zu konkreten Suchanfragen angezeigt, mit Profil, Beschreibung,
                 Suchbegriffen, Kontaktinformationen und je nach Paket mit
                 Werbeangebot.
@@ -291,7 +291,7 @@ export default function HomePage() {
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-                Beispiel-Firmen auf Neario
+                Beispiel-Firmen auf Locario
               </h2>
 
               <p className="mt-3 max-w-2xl text-slate-400">
@@ -365,7 +365,7 @@ export default function HomePage() {
 
         <section className="mt-24 hidden overflow-hidden rounded-[2rem] border border-cyan-300/20 bg-cyan-300/10 p-8 text-center shadow-2xl shadow-cyan-950/20 md:block md:p-12">
           <p className="text-sm font-bold uppercase tracking-wide text-cyan-200">
-            Neario für den regionalen Markt
+            Locario für den regionalen Markt
           </p>
 
           <h2 className="mx-auto mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">

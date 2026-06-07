@@ -9,7 +9,7 @@ export default function AgbPage() {
         </h1>
 
         <p className="mt-6 text-slate-300">
-          Diese AGB regeln die Nutzung von Neario durch Firmen und Nutzer.
+          Diese AGB regeln die Nutzung von Locario durch Firmen und Nutzer.
         </p>
 
         <div className="mt-10 space-y-8 rounded-3xl border border-white/10 bg-white/5 p-8">
@@ -22,7 +22,7 @@ export default function AgbPage() {
               <p>Strasse Hausnummer</p>
               <p>PLZ Ort</p>
               <p>Schweiz</p>
-              <p>E-Mail: info@neario.ch</p>
+              <p>E-Mail: info@Locario.ch</p>
             </div>
           </section>
 
@@ -31,7 +31,7 @@ export default function AgbPage() {
 
             <p className="mt-4 text-slate-300">
               Diese Allgemeinen Geschäftsbedingungen gelten für die Nutzung der
-              Plattform Neario. Neario richtet sich an Nutzer, die regionale
+              Plattform Locario. Locario richtet sich an Nutzer, die regionale
               Firmen, Produkte oder Dienstleistungen suchen, sowie an Firmen,
               die ein Firmenprofil, Werbeangebote oder Lead-Funktionen nutzen.
             </p>
@@ -41,7 +41,7 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">3. Leistungsbeschreibung</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario stellt eine lokale Such-, Werbe- und Leadplattform bereit.
+              Locario stellt eine lokale Such-, Werbe- und Leadplattform bereit.
               Firmen können ein Profil erfassen, Kategorien und Suchbegriffe
               hinterlegen, Kontaktinformationen anzeigen und je nach Paket
               Werbeanzeigen oder Angebote veröffentlichen. Nutzer können Firmen
@@ -56,7 +56,7 @@ export default function AgbPage() {
               Firmen sind verpflichtet, vollständige, wahrheitsgemässe und
               aktuelle Angaben zu machen. Dazu gehören insbesondere Firmenname,
               Kontaktangaben, Kategorien, Beschreibung, Stadt, Website und
-              Angebote. Neario kann Profile prüfen, ablehnen, bearbeiten oder
+              Angebote. Locario kann Profile prüfen, ablehnen, bearbeiten oder
               entfernen, wenn Inhalte unvollständig, irreführend, rechtswidrig
               oder qualitativ ungeeignet sind.
             </p>
@@ -66,7 +66,7 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">5. Pakete und Sichtbarkeit</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario kann unterschiedliche Pakete anbieten, zum Beispiel
+              Locario kann unterschiedliche Pakete anbieten, zum Beispiel
               Starter, Pro und Premium. Die Pakete können unterschiedliche
               Funktionen, Darstellungsmöglichkeiten und Sichtbarkeitsstufen
               enthalten. Eine bestimmte Anzahl an Anfragen, Klicks oder
@@ -89,9 +89,9 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">7. Kundenanfragen und Leads</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario kann Nutzern ermöglichen, Anfragen an Firmen zu senden.
+              Locario kann Nutzern ermöglichen, Anfragen an Firmen zu senden.
               Diese Anfragen werden der jeweiligen Firma im Partner-Dashboard
-              angezeigt. Neario übernimmt keine Garantie dafür, dass aus einer
+              angezeigt. Locario übernimmt keine Garantie dafür, dass aus einer
               Anfrage ein Auftrag, Kauf oder Vertrag entsteht.
             </p>
           </section>
@@ -114,7 +114,7 @@ export default function AgbPage() {
             <p className="mt-4 text-slate-300">
               Preise, Laufzeiten und Zahlungsbedingungen richten sich nach dem
               jeweils vereinbarten Paket oder Angebot. Sofern nicht anders
-              vereinbart, verstehen sich Preise in Schweizer Franken. Neario
+              vereinbart, verstehen sich Preise in Schweizer Franken. Locario
               kann Preise und Pakete für zukünftige Vertragsperioden anpassen.
             </p>
           </section>
@@ -136,7 +136,7 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">11. Verfügbarkeit</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario bemüht sich um eine stabile und sichere Verfügbarkeit der
+              Locario bemüht sich um eine stabile und sichere Verfügbarkeit der
               Plattform. Eine unterbruchfreie Verfügbarkeit wird jedoch nicht
               garantiert. Wartung, technische Störungen oder externe Einflüsse
               können zu Einschränkungen führen.
@@ -147,7 +147,7 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">12. Haftung</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario haftet nur für direkte Schäden, die durch absichtliches
+              Locario haftet nur für direkte Schäden, die durch absichtliches
               oder grobfahrlässiges Verhalten verursacht wurden, soweit gesetzlich
               zulässig. Für Inhalte von Firmenprofilen, Angebote, externe Links,
               Geschäftsabschlüsse zwischen Nutzern und Firmen sowie indirekte
@@ -160,7 +160,7 @@ export default function AgbPage() {
 
             <p className="mt-4 text-slate-300">
               Informationen zur Bearbeitung von Personendaten finden sich in der
-              Datenschutzerklärung von Neario. Diese ist Bestandteil der Nutzung
+              Datenschutzerklärung von Locario. Diese ist Bestandteil der Nutzung
               der Plattform.
             </p>
           </section>
@@ -169,7 +169,7 @@ export default function AgbPage() {
             <h2 className="text-2xl font-bold">14. Änderungen der AGB</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario kann diese AGB jederzeit anpassen. Für bestehende
+              Locario kann diese AGB jederzeit anpassen. Für bestehende
               Vertragsverhältnisse gelten Änderungen ab Mitteilung oder ab der
               nächsten Vertragsperiode, sofern keine zwingenden gesetzlichen
               Regelungen entgegenstehen.
@@ -183,7 +183,7 @@ export default function AgbPage() {
 
             <p className="mt-4 text-slate-300">
               Es gilt Schweizer Recht. Gerichtsstand ist, soweit gesetzlich
-              zulässig, der Sitz des Betreibers von Neario.
+              zulässig, der Sitz des Betreibers von Locario.
             </p>
           </section>
 

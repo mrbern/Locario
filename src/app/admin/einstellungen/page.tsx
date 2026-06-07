@@ -28,7 +28,7 @@ export default function AdminSettingsPage() {
 
           <p className="mt-5 max-w-3xl text-slate-300">
             Hier entsteht später der zentrale Bereich für Plattformtexte,
-            Pakete, Kategorien, Preise und weitere Neario-Einstellungen.
+            Pakete, Kategorien, Preise und weitere Locario-Einstellungen.
           </p>
         </div>
       </div>
@@ -66,7 +66,7 @@ export default function AdminSettingsPage() {
           </p>
 
           <h2 className="mt-2 text-3xl font-black">
-            Aktuelle Neario-Pakete
+            Aktuelle Locario-Pakete
           </h2>
 
           <p className="mt-3 text-slate-400">

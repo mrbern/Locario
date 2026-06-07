@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import type { NearioEvent } from "@/types/event";
+import type { LocarioEvent } from "@/types/event";
 
 const eventCategories = [
   "Konzert",
@@ -57,7 +57,7 @@ function getEventPlanClassName(plan: string | undefined) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
-function eventHasImage(event: NearioEvent) {
+function eventHasImage(event: LocarioEvent) {
   return Boolean(event.imageUrl && event.imageUrl.trim());
 }
 
@@ -85,11 +85,11 @@ function formatEventTime(dateValue: string) {
   });
 }
 
-function isUpcomingEvent(event: NearioEvent) {
+function isUpcomingEvent(event: LocarioEvent) {
   return new Date(event.startsAt).getTime() >= new Date().setHours(0, 0, 0, 0);
 }
 
-function isHighlightedEvent(event: NearioEvent) {
+function isHighlightedEvent(event: LocarioEvent) {
   if (event.plan === "premium" || event.plan === "highlight") {
     return true;
   }
@@ -101,7 +101,7 @@ function isHighlightedEvent(event: NearioEvent) {
   return new Date(event.highlightUntil).getTime() >= Date.now();
 }
 
-function getEventSearchText(event: NearioEvent) {
+function getEventSearchText(event: LocarioEvent) {
   return normalizeText(
     [
       event.title,
@@ -117,7 +117,7 @@ function getEventSearchText(event: NearioEvent) {
 }
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<NearioEvent[]>([]);
+  const [events, setEvents] = useState<LocarioEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -142,7 +142,7 @@ export default function EventsPage() {
         throw new Error("Events konnten nicht geladen werden.");
       }
 
-      const data = (await response.json()) as NearioEvent[];
+      const data = (await response.json()) as LocarioEvent[];
       setEvents(data);
     } catch {
       setEvents([]);
@@ -223,7 +223,7 @@ export default function EventsPage() {
           <div>
             <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
-              Neario Events
+              Locario Events
             </div>
 
             <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight md:text-7xl">
@@ -442,7 +442,7 @@ function EventCard({
   event,
   highlighted = false,
 }: {
-  event: NearioEvent;
+  event: LocarioEvent;
   highlighted?: boolean;
 }) {
   const hasImage = eventHasImage(event);

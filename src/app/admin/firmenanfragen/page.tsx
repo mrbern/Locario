@@ -647,7 +647,7 @@ export default function AdminCompanyInquiriesPage() {
 
                 <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5">
                   <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                    Nachricht an Neario
+                    Nachricht an Locario
                   </p>
 
                   <p className="mt-2 text-slate-200">{inquiry.message}</p>

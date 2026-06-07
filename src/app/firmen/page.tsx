@@ -288,7 +288,7 @@ export default function CompaniesPage() {
                 href="/suche"
                 className="rounded-3xl border border-white/15 bg-white/[0.04] px-7 py-4 text-center font-bold text-white transition hover:-translate-y-0.5 hover:border-cyan-300/30 hover:bg-white/10"
               >
-                Zur Neario-Suche
+                Zur Locario-Suche
               </Link>
             </div>
           </div>
@@ -436,7 +436,7 @@ export default function CompaniesPage() {
 
               <p className="mt-4 text-slate-300">
                 Mit diesen Filtern gibt es aktuell keinen passenden Anbieter.
-                Das kann später ein Hinweis sein, welche Firmen Neario noch
+                Das kann später ein Hinweis sein, welche Firmen Locario noch
                 akquirieren sollte.
               </p>
 

@@ -1,4 +1,4 @@
-export type NearioEvent = {
+export type LocarioEvent = {
   id: string;
 
   title: string;

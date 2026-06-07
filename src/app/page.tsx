@@ -13,7 +13,7 @@ const userBenefits = [
   {
     title: "Regionale Anbieter finden",
     description:
-      "Neario zeigt dir passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
+      "Locario zeigt dir passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
   },
   {
     title: "Events entdecken",
@@ -44,7 +44,7 @@ const eventBenefits = [
   {
     title: "Event anfragen",
     description:
-      "Veranstalter können Events über Neario einreichen und ein passendes Wochenpaket auswählen.",
+      "Veranstalter können Events über Locario einreichen und ein passendes Wochenpaket auswählen.",
   },
   {
     title: "Admin prüft",
@@ -103,7 +103,7 @@ export default function HomePage() {
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg md:leading-8">
-            Neario verbindet lokale Firmen, regionale Anbieter und Events an
+            Locario verbindet lokale Firmen, regionale Anbieter und Events an
             einem Ort. Suche nach dem, was du brauchst, oder entdecke
             Veranstaltungen in deiner Nähe.
           </p>
@@ -163,7 +163,7 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Neario soll dir helfen, regionale Anbieter und Veranstaltungen
+              Locario soll dir helfen, regionale Anbieter und Veranstaltungen
               einfacher zu entdecken, ohne lange auf verschiedenen Seiten suchen
               zu müssen.
             </p>
@@ -191,7 +191,7 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Firmen können auf Neario mit Profil, Kategorien, Bild,
+              Firmen können auf Locario mit Profil, Kategorien, Bild,
               Suchbegriffen und je nach Paket mit Leads, Dashboard und Werbung
               sichtbar werden.
             </p>
@@ -251,7 +251,7 @@ export default function HomePage() {
 
         <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl shadow-slate-950/20 md:p-12">
           <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-            Neario
+            Locario
           </p>
 
           <h2 className="mx-auto mt-4 max-w-4xl text-4xl font-black tracking-tight md:text-5xl">
@@ -261,7 +261,7 @@ export default function HomePage() {
 
           <p className="mx-auto mt-5 max-w-2xl text-slate-300">
             Suche direkt los, entdecke Anbieter oder bring deine Firma oder dein
-            Event auf Neario.
+            Event auf Locario.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">

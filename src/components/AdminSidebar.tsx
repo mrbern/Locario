@@ -69,7 +69,7 @@ export default function AdminSidebar() {
     <aside className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/30 backdrop-blur-xl lg:sticky lg:top-28 lg:h-fit">
       <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
         <p className="text-sm font-black uppercase tracking-wide text-cyan-200">
-          Neario Admin
+          Locario Admin
         </p>
 
         <h2 className="mt-2 text-2xl font-black tracking-tight text-white">

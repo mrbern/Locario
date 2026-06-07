@@ -47,7 +47,7 @@ export default function AdminLoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-16 text-white">
       <section className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-cyan-950/30">
-        <p className="text-sm font-semibold text-cyan-300">Neario Admin</p>
+        <p className="text-sm font-semibold text-cyan-300">Locario Admin</p>
 
         <h1 className="mt-3 text-4xl font-bold">Admin-Login</h1>
 

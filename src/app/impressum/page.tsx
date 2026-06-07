@@ -7,7 +7,7 @@ export default function ImpressumPage() {
         <h1 className="mt-3 text-4xl font-bold md:text-6xl">Impressum</h1>
 
         <p className="mt-6 text-slate-300">
-          Angaben zum Betreiber der Plattform Neario.
+          Angaben zum Betreiber der Plattform Locario.
         </p>
 
         <div className="mt-10 space-y-8 rounded-3xl border border-white/10 bg-white/5 p-8">
@@ -27,9 +27,9 @@ export default function ImpressumPage() {
             <h2 className="text-2xl font-bold">Kontakt</h2>
 
             <div className="mt-4 space-y-2 text-slate-300">
-              <p>E-Mail: info@neario.ch</p>
+              <p>E-Mail: info@Locario.ch</p>
               <p>Telefon: +41 XX XXX XX XX</p>
-              <p>Website: www.neario.ch</p>
+              <p>Website: www.Locario.ch</p>
             </div>
           </section>
 
@@ -50,7 +50,7 @@ export default function ImpressumPage() {
 
             <div className="mt-4 space-y-2 text-slate-300">
               <p>DEIN NAME</p>
-              <p>E-Mail: info@neario.ch</p>
+              <p>E-Mail: info@Locario.ch</p>
             </div>
           </section>
 
@@ -58,7 +58,7 @@ export default function ImpressumPage() {
             <h2 className="text-2xl font-bold">Haftungsausschluss</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario stellt Informationen über regionale Firmen, Angebote,
+              Locario stellt Informationen über regionale Firmen, Angebote,
               Dienstleistungen und Kontaktmöglichkeiten bereit. Trotz
               sorgfältiger Prüfung übernehmen wir keine Gewähr für die
               Aktualität, Richtigkeit und Vollständigkeit der bereitgestellten

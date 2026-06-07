@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const ADMIN_AUTH_COOKIE_NAME = "neario-admin-auth";
+const ADMIN_AUTH_COOKIE_NAME = "Locario-admin-auth";
 
 function getAdminSessionToken() {
   return process.env.ADMIN_SESSION_TOKEN ?? "";

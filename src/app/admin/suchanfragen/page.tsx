@@ -173,7 +173,7 @@ export default function AdminSearchLogsPage() {
           <p className="mt-5 max-w-3xl text-slate-300">
             Analysiere, wonach Nutzer suchen. Besonders wertvoll sind
             Suchanfragen ohne Treffer, weil daraus neue Akquise-Chancen für
-            Neario entstehen.
+            Locario entstehen.
           </p>
         </div>
 

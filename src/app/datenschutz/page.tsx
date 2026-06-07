@@ -9,7 +9,7 @@ export default function DatenschutzPage() {
         </h1>
 
         <p className="mt-6 text-slate-300">
-          Diese Datenschutzerklärung informiert darüber, wie Neario
+          Diese Datenschutzerklärung informiert darüber, wie Locario
           Personendaten bearbeitet.
         </p>
 
@@ -23,7 +23,7 @@ export default function DatenschutzPage() {
               <p>Strasse Hausnummer</p>
               <p>PLZ Ort</p>
               <p>Schweiz</p>
-              <p>E-Mail: info@neario.ch</p>
+              <p>E-Mail: info@Locario.ch</p>
             </div>
           </section>
 
@@ -31,7 +31,7 @@ export default function DatenschutzPage() {
             <h2 className="text-2xl font-bold">2. Zweck der Plattform</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario ist eine lokale Such-, Werbe- und Leadplattform. Nutzer
+              Locario ist eine lokale Such-, Werbe- und Leadplattform. Nutzer
               können nach regionalen Firmen, Produkten und Dienstleistungen
               suchen. Firmen können Firmenprofile erfassen, verwalten und
               Kundenanfragen erhalten.
@@ -97,7 +97,7 @@ export default function DatenschutzPage() {
             <h2 className="text-2xl font-bold">6. Kundenanfragen</h2>
 
             <p className="mt-4 text-slate-300">
-              Wenn Nutzer über Neario eine Anfrage an eine Firma senden, werden
+              Wenn Nutzer über Locario eine Anfrage an eine Firma senden, werden
               die eingegebenen Daten gespeichert und der betreffenden Firma zur
               Bearbeitung im Partner-Dashboard angezeigt. Dazu können Name,
               E-Mail-Adresse, Telefonnummer, Nachricht und die ursprüngliche
@@ -109,7 +109,7 @@ export default function DatenschutzPage() {
             <h2 className="text-2xl font-bold">7. Suchanfragen</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario kann Suchanfragen speichern, um die Plattform zu
+              Locario kann Suchanfragen speichern, um die Plattform zu
               verbessern und zu erkennen, welche Produkte, Dienstleistungen oder
               Firmen in einer Region gesucht werden. Dabei können Suchtext,
               normalisierte Suchanfrage, Trefferanzahl und Zeitpunkt gespeichert
@@ -121,7 +121,7 @@ export default function DatenschutzPage() {
             <h2 className="text-2xl font-bold">8. Cookies und Login</h2>
 
             <p className="mt-4 text-slate-300">
-              Neario kann Cookies verwenden, um Login-Funktionen für Admins und
+              Locario kann Cookies verwenden, um Login-Funktionen für Admins und
               Partner bereitzustellen und die Sicherheit der Plattform zu
               gewährleisten. Cookies können im Browser eingeschränkt oder
               gelöscht werden. Dadurch können einzelne Funktionen eingeschränkt
@@ -184,7 +184,7 @@ export default function DatenschutzPage() {
               Betroffene Personen können im Rahmen des anwendbaren
               Datenschutzrechts Auskunft über ihre bearbeiteten Personendaten
               verlangen sowie Berichtigung, Löschung oder Einschränkung der
-              Bearbeitung beantragen. Anfragen können an info@neario.ch
+              Bearbeitung beantragen. Anfragen können an info@Locario.ch
               gerichtet werden.
             </p>
           </section>

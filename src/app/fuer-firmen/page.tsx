@@ -79,9 +79,9 @@ const companyPackages = [
     price: "CHF 49",
     badge: "Basis-Sichtbarkeit",
     description:
-      "Für Firmen, die mit einem einfachen Profil auf Neario sichtbar sein möchten – ohne Leadformular und ohne Partner-Dashboard.",
+      "Für Firmen, die mit einem einfachen Profil auf Locario sichtbar sein möchten – ohne Leadformular und ohne Partner-Dashboard.",
     features: [
-      "Firmenprofil auf Neario",
+      "Firmenprofil auf Locario",
       "Hauptkategorie und Unterkategorien",
       "Kontaktinformationen sichtbar",
       "Website, Telefon und E-Mail sichtbar",
@@ -89,7 +89,7 @@ const companyPackages = [
       "Titelbild möglich",
       "Auffindbar in Firmenübersicht und Suche",
     ],
-    note: "Keine Neario-Leads, kein Partner-Dashboard und keine aktive Werbeanzeige enthalten.",
+    note: "Keine Locario-Leads, kein Partner-Dashboard und keine aktive Werbeanzeige enthalten.",
     highlighted: false,
   },
   {
@@ -109,9 +109,9 @@ const companyPackages = [
       "Werbetitel, Werbetext und CTA",
       "Anzeige in Suche und Firmenprofil",
       "Bessere Sichtbarkeit als Starter",
-      "Pro-Badge auf Neario",
+      "Pro-Badge auf Locario",
     ],
-    note: "Beste Wahl für aktive Kundengewinnung mit Neario.",
+    note: "Beste Wahl für aktive Kundengewinnung mit Locario.",
     highlighted: true,
   },
   {
@@ -124,7 +124,7 @@ const companyPackages = [
     features: [
       "Alles aus Pro",
       "Premium-Platzierung vor Pro und Starter",
-      "Premium-Badge auf Neario",
+      "Premium-Badge auf Locario",
       "Stärkste Sichtbarkeit in passenden Treffern",
       "Mehr Aufmerksamkeit bei regionalen Suchen",
       "Priorisierte Darstellung",
@@ -152,7 +152,7 @@ const benefits = [
   {
     title: "Lokale Sichtbarkeit",
     description:
-      "Neario macht regionale Firmen, Anbieter und Events sichtbar, wenn Menschen lokal suchen oder entdecken möchten.",
+      "Locario macht regionale Firmen, Anbieter und Events sichtbar, wenn Menschen lokal suchen oder entdecken möchten.",
   },
   {
     title: "Moderne Darstellung",
@@ -162,12 +162,12 @@ const benefits = [
   {
     title: "Direkte Nachfrage",
     description:
-      "Firmen erhalten ab Pro direkte Neario-Leads. Veranstalter können Events gezielt vor dem Eventdatum bewerben.",
+      "Firmen erhalten ab Pro direkte Locario-Leads. Veranstalter können Events gezielt vor dem Eventdatum bewerben.",
   },
   {
     title: "Regionale Werbefläche",
     description:
-      "Neario verbindet lokale Suche, Werbung und Event-Sichtbarkeit in einer modernen Plattform.",
+      "Locario verbindet lokale Suche, Werbung und Event-Sichtbarkeit in einer modernen Plattform.",
   },
 ];
 
@@ -185,10 +185,10 @@ const steps = [
       "Trage Firma, Veranstalter, Ort, Beschreibung, Kontakt und gewünschtes Paket ein.",
   },
   {
-    title: "Prüfung durch Neario",
+    title: "Prüfung durch Locario",
     number: "03",
     description:
-      "Neario prüft die Angaben und kann dein Profil oder Event anschliessend veröffentlichen.",
+      "Locario prüft die Angaben und kann dein Profil oder Event anschliessend veröffentlichen.",
   },
   {
     title: "Sichtbar werden",
@@ -224,14 +224,14 @@ const targetGroups = [
 
 const faqs = [
   {
-    question: "Ist Neario nur für Firmen?",
+    question: "Ist Locario nur für Firmen?",
     answer:
-      "Nein. Neario startet mit Firmenprofilen und Events. Firmen können dauerhaft sichtbar sein, Events können zeitlich begrenzt und wochenweise beworben werden.",
+      "Nein. Locario startet mit Firmenprofilen und Events. Firmen können dauerhaft sichtbar sein, Events können zeitlich begrenzt und wochenweise beworben werden.",
   },
   {
     question: "Was ist im Starter-Paket enthalten?",
     answer:
-      "Starter ist ein einfaches Sichtbarkeitspaket. Die Firma erhält ein öffentliches Profil mit Kontaktangaben, Website, Telefon, E-Mail, Kategorien, Beschreibung und Suchbegriffen. Neario-Leads, Partner-Dashboard und Werbeanzeigen sind erst ab Pro verfügbar.",
+      "Starter ist ein einfaches Sichtbarkeitspaket. Die Firma erhält ein öffentliches Profil mit Kontaktangaben, Website, Telefon, E-Mail, Kategorien, Beschreibung und Suchbegriffen. Locario-Leads, Partner-Dashboard und Werbeanzeigen sind erst ab Pro verfügbar.",
   },
   {
     question: "Was ist der Unterschied zwischen Starter und Pro?",
@@ -438,7 +438,7 @@ export default function ForCompaniesPage() {
         });
 
         setSuccessMessage(
-          "Danke! Deine Event-Anfrage wurde erfolgreich gesendet. Neario kann dein Event nun prüfen und dich kontaktieren."
+          "Danke! Deine Event-Anfrage wurde erfolgreich gesendet. Locario kann dein Event nun prüfen und dich kontaktieren."
         );
 
         setTimeout(() => {
@@ -515,7 +515,7 @@ export default function ForCompaniesPage() {
       });
 
       setSuccessMessage(
-        "Danke! Deine Firmenanfrage wurde erfolgreich gesendet. Neario kann dein Profil nun prüfen und dich kontaktieren."
+        "Danke! Deine Firmenanfrage wurde erfolgreich gesendet. Locario kann dein Profil nun prüfen und dich kontaktieren."
       );
 
       setTimeout(() => {
@@ -554,7 +554,7 @@ export default function ForCompaniesPage() {
             </h1>
 
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-300">
-              Neario verbindet regionale Firmen, lokale Anbieter und Events an
+              Locario verbindet regionale Firmen, lokale Anbieter und Events an
               einem Ort. Starter sorgt für einfache Sichtbarkeit. Ab Pro kommen
               Leads, Partner-Dashboard und Werbeanzeigen dazu.
             </p>
@@ -589,7 +589,7 @@ export default function ForCompaniesPage() {
 
             <div className="relative rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
               <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Neario als regionales Portal
+                Locario als regionales Portal
               </p>
 
               <h2 className="mt-3 text-3xl font-black tracking-tight">
@@ -650,14 +650,14 @@ export default function ForCompaniesPage() {
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-                Neario funktioniert für Firmen, Vereine, Veranstalter und lokale
+                Locario funktioniert für Firmen, Vereine, Veranstalter und lokale
                 Organisationen.
               </h2>
 
               <p className="mt-5 text-slate-300">
                 Entscheidend ist regionale Relevanz: Wer lokal gefunden,
                 besucht, kontaktiert oder entdeckt werden möchte, kann von
-                Neario profitieren.
+                Locario profitieren.
               </p>
             </div>
 
@@ -677,7 +677,7 @@ export default function ForCompaniesPage() {
         <section className="mt-20">
           <div className="max-w-3xl">
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              So funktioniert Neario
+              So funktioniert Locario
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
@@ -685,7 +685,7 @@ export default function ForCompaniesPage() {
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Neario soll einfach bleiben: Bereich wählen, Angaben erfassen,
+              Locario soll einfach bleiben: Bereich wählen, Angaben erfassen,
               prüfen lassen und regional sichtbar werden.
             </p>
           </div>
@@ -786,7 +786,7 @@ export default function ForCompaniesPage() {
                   }
                   description={item.description}
                   features={[
-                    "Event-Kachel auf Neario",
+                    "Event-Kachel auf Locario",
                     "Bild, Datum, Ort und Beschreibung",
                     "Website- oder Ticketlink",
                     item.value === "basic"
@@ -829,7 +829,7 @@ export default function ForCompaniesPage() {
               <p className="mt-5 text-slate-300">
                 {isEventRequest
                   ? "Erfasse dein Event mit Veranstalter, Kategorie, Datum, Ort und gewünschtem Wochenpaket."
-                  : "Je vollständiger deine Angaben sind, desto schneller kann Neario dein Firmenprofil prüfen und veröffentlichen."}
+                  : "Je vollständiger deine Angaben sind, desto schneller kann Locario dein Firmenprofil prüfen und veröffentlichen."}
               </p>
 
               <div className="mt-7 rounded-3xl border border-white/10 bg-slate-950/50 p-6">
@@ -857,7 +857,7 @@ export default function ForCompaniesPage() {
 
                 <p className="mt-3 text-sm text-slate-300">
                   {isEventRequest
-                    ? "Event-Anfragen landen neu separat in der Event-Anfrageverwaltung. Neario kann daraus anschliessend ein Event im Admin erstellen und veröffentlichen."
+                    ? "Event-Anfragen landen neu separat in der Event-Anfrageverwaltung. Locario kann daraus anschliessend ein Event im Admin erstellen und veröffentlichen."
                     : "Starter enthält kein Leadformular und kein Partner-Dashboard. Wenn du aktive Anfragen und Profilverwaltung möchtest, wähle Pro oder Premium."}
                 </p>
               </div>
@@ -1171,13 +1171,13 @@ export default function ForCompaniesPage() {
                 )}
 
                 <TextareaField
-                  label="Nachricht an Neario"
+                  label="Nachricht an Locario"
                   value={form.message}
                   onChange={(value) => updateField("message", value)}
                   placeholder={
                     isEventRequest
                       ? "Gibt es Ticketlink, Bildwünsche, genaue Zeiten oder besondere Hinweise zum Event?"
-                      : "Gibt es etwas, das Neario vor der Veröffentlichung wissen sollte?"
+                      : "Gibt es etwas, das Locario vor der Veröffentlichung wissen sollte?"
                   }
                   rows={4}
                   required
@@ -1218,7 +1218,7 @@ export default function ForCompaniesPage() {
           </p>
 
           <h2 className="mx-auto mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
-            Starte mit Neario und mache deine Firma oder dein Event dort
+            Starte mit Locario und mache deine Firma oder dein Event dort
             sichtbar, wo Menschen lokal suchen.
           </h2>
 

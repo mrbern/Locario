@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Company } from "@/types/company";
 import type { CompanyInquiry } from "@/types/company-inquiry";
 import type { Lead } from "@/types/lead";
-import type { NearioEvent } from "@/types/event";
+import type { LocarioEvent } from "@/types/event";
 
 type SearchLogStat = {
   normalizedQuery: string;
@@ -34,13 +34,13 @@ const emptySearchStats: SearchLogStatsResponse = {
   acquisitionOpportunities: [],
 };
 
-function isHighlightedEvent(event: NearioEvent) {
+function isHighlightedEvent(event: LocarioEvent) {
   return event.plan === "highlight" || event.plan === "premium";
 }
 
 export default function AdminDashboardPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [events, setEvents] = useState<NearioEvent[]>([]);
+  const [events, setEvents] = useState<LocarioEvent[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [companyInquiries, setCompanyInquiries] = useState<CompanyInquiry[]>(
     []
@@ -128,7 +128,7 @@ export default function AdminDashboardPage() {
       }
 
       const companiesData = (await companiesResponse.json()) as Company[];
-      const eventsData = (await eventsResponse.json()) as NearioEvent[];
+      const eventsData = (await eventsResponse.json()) as LocarioEvent[];
       const leadsData = (await leadsResponse.json()) as Lead[];
       const inquiriesData =
         (await inquiriesResponse.json()) as CompanyInquiry[];
@@ -171,7 +171,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
-            Neario{" "}
+            Locario{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
               Übersicht
             </span>

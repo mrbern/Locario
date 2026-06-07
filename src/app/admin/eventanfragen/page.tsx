@@ -7,7 +7,7 @@ import {
   getEventPlanPrice,
 } from "@/data/event-plans";
 import type { EventInquiry } from "@/types/event-inquiry";
-import type { NearioEvent } from "@/types/event";
+import type { LocarioEvent } from "@/types/event";
 
 const statusOptions = [
   {
@@ -329,7 +329,7 @@ export default function AdminEventInquiriesPage() {
         );
       }
 
-      const createdEvent = (await response.json()) as NearioEvent;
+      const createdEvent = (await response.json()) as LocarioEvent;
 
       const updatedInquiry = await updateInquiryStatus(inquiry.id, "approved");
 
@@ -658,7 +658,7 @@ export default function AdminEventInquiriesPage() {
 
                       <div className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5">
                         <p className="text-xs font-black uppercase tracking-wide text-amber-100">
-                          Nachricht an Neario
+                          Nachricht an Locario
                         </p>
 
                         <p className="mt-3 whitespace-pre-line break-words text-slate-300">
