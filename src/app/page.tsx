@@ -4,6 +4,60 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+const userBenefits = [
+  {
+    title: "Natürlich suchen",
+    description:
+      "Suche wie du sprichst: zum Beispiel „Ich brauche Kies“, „Werkstatt in Wattenwil“ oder „Nissan kaufen“.",
+  },
+  {
+    title: "Regionale Anbieter finden",
+    description:
+      "Neario zeigt dir passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
+  },
+  {
+    title: "Events entdecken",
+    description:
+      "Finde Märkte, Konzerte, Vereinsanlässe, Partys, Kultur, Sport und lokale Highlights.",
+  },
+];
+
+const businessBenefits = [
+  {
+    title: "Starter",
+    description:
+      "Ein einfaches Firmenprofil für regionale Sichtbarkeit mit Kontaktangaben, Beschreibung und Suchbegriffen.",
+  },
+  {
+    title: "Pro",
+    description:
+      "Business-Tarif mit Partner-Dashboard, Leadformular, Leadverwaltung und aktiver Werbeanzeige.",
+  },
+  {
+    title: "Premium",
+    description:
+      "Maximale Präsenz mit bevorzugter Platzierung und stärkster Sichtbarkeit in passenden Treffern.",
+  },
+];
+
+const eventBenefits = [
+  {
+    title: "Event anfragen",
+    description:
+      "Veranstalter können Events über Neario einreichen und ein passendes Wochenpaket auswählen.",
+  },
+  {
+    title: "Admin prüft",
+    description:
+      "Event-Anfragen werden im Admin geprüft und können direkt als öffentliches Event erstellt werden.",
+  },
+  {
+    title: "Regional sichtbar",
+    description:
+      "Das Event erscheint auf der Events-Seite mit Datum, Ort, Beschreibung, Website und Ticketlink.",
+  },
+];
+
 export default function HomePage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -44,9 +98,8 @@ export default function HomePage() {
           <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl md:text-7xl">
             Entdecke, was in deiner{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              Region
-            </span>{" "}
-            läuft.
+              Region läuft.
+            </span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg md:leading-8">
@@ -75,7 +128,7 @@ export default function HomePage() {
           </form>
         </div>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
+        <div className="mx-auto mt-10 grid w-full max-w-6xl gap-6 lg:grid-cols-2">
           <PortalCard
             href="/firmen"
             eyebrow="Lokale Anbieter"
@@ -96,52 +149,135 @@ export default function HomePage() {
             variant="events"
           />
         </div>
+      </section>
 
-        <section className="mt-10 grid gap-4 md:grid-cols-3">
-          <InfoCard
-            title="Für Nutzer"
-            description="Schnell finden, was lokal relevant ist: Firmen, Angebote und Veranstaltungen."
-          />
+      <section className="relative mx-auto max-w-7xl px-5 pb-20 sm:px-6">
+        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20 md:p-10">
+          <div className="max-w-3xl">
+            <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+              Für Nutzer
+            </p>
 
-          <InfoCard
-            title="Für Firmen"
-            description="Mehr Sichtbarkeit durch moderne Profile, Suchbegriffe, Bilder und Leads."
-          />
+            <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
+              Lokal suchen, schneller finden.
+            </h2>
 
-          <InfoCard
-            title="Für Veranstalter"
-            description="Events können später wochenweise beworben und hervorgehoben werden."
-          />
+            <p className="mt-5 text-slate-300">
+              Neario soll dir helfen, regionale Anbieter und Veranstaltungen
+              einfacher zu entdecken, ohne lange auf verschiedenen Seiten suchen
+              zu müssen.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-6 md:grid-cols-3">
+            {userBenefits.map((benefit) => (
+              <InfoCard
+                key={benefit.title}
+                title={benefit.title}
+                description={benefit.description}
+              />
+            ))}
+          </div>
         </section>
 
-        <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 text-center shadow-2xl shadow-slate-950/20 md:p-8">
-          <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-            Mitmachen
-          </p>
+        <section className="mt-10 grid gap-8 lg:grid-cols-2">
+          <section className="rounded-[2rem] border border-cyan-300/20 bg-cyan-300/10 p-8 shadow-2xl shadow-cyan-950/20">
+            <p className="text-sm font-black uppercase tracking-wide text-cyan-200">
+              Für Firmen
+            </p>
 
-          <h2 className="mt-3 text-2xl font-black tracking-tight md:text-4xl">
-            Du willst mit deiner Firma oder deinem Event auf Neario sichtbar
-            werden?
-          </h2>
+            <h2 className="mt-4 text-4xl font-black tracking-tight">
+              Sichtbar werden, wenn Menschen lokal suchen.
+            </h2>
 
-          <p className="mx-auto mt-3 max-w-2xl text-slate-300">
-            Neario wird Schritt für Schritt zur lokalen Plattform für regionale
-            Sichtbarkeit, Werbung und Anfragen.
-          </p>
+            <p className="mt-5 text-slate-300">
+              Firmen können auf Neario mit Profil, Kategorien, Bild,
+              Suchbegriffen und je nach Paket mit Leads, Dashboard und Werbung
+              sichtbar werden.
+            </p>
 
-          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <div className="mt-8 grid gap-4">
+              {businessBenefits.map((benefit) => (
+                <BusinessCard
+                  key={benefit.title}
+                  title={benefit.title}
+                  description={benefit.description}
+                />
+              ))}
+            </div>
+
             <Link
               href="/fuer-firmen"
-              className="rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
+              className="mt-8 inline-flex rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
             >
               Firma eintragen
             </Link>
+          </section>
+
+          <section className="rounded-[2rem] border border-amber-300/20 bg-amber-300/10 p-8 shadow-2xl shadow-amber-950/20">
+            <p className="text-sm font-black uppercase tracking-wide text-amber-200">
+              Für Veranstalter
+            </p>
+
+            <h2 className="mt-4 text-4xl font-black tracking-tight">
+              Events regional bewerben.
+            </h2>
+
+            <p className="mt-5 text-slate-300">
+              Veranstalter können Events einreichen. Im Admin können diese
+              geprüft, angenommen und direkt als öffentliches Event erstellt
+              werden.
+            </p>
+
+            <div className="mt-8 grid gap-4">
+              {eventBenefits.map((benefit) => (
+                <BusinessCard
+                  key={benefit.title}
+                  title={benefit.title}
+                  description={benefit.description}
+                  amber
+                />
+              ))}
+            </div>
 
             <Link
-              href="/events"
-              className="rounded-3xl border border-white/15 px-7 py-4 text-center font-bold text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              href="/fuer-firmen"
+              className="mt-8 inline-flex rounded-3xl bg-gradient-to-r from-amber-300 to-orange-400 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-amber-500/20 transition hover:-translate-y-0.5"
             >
-              Events ansehen
+              Event bewerben
+            </Link>
+          </section>
+        </section>
+
+        <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl shadow-slate-950/20 md:p-12">
+          <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+            Neario
+          </p>
+
+          <h2 className="mx-auto mt-4 max-w-4xl text-4xl font-black tracking-tight md:text-5xl">
+            Eine moderne lokale Plattform für Firmen, Events und regionale
+            Sichtbarkeit.
+          </h2>
+
+          <p className="mx-auto mt-5 max-w-2xl text-slate-300">
+            Suche direkt los, entdecke Anbieter oder bring deine Firma oder dein
+            Event auf Neario.
+          </p>
+
+          <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => goToSearch("")}
+              className="rounded-3xl bg-white px-8 py-4 text-center font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-200"
+            >
+              Suche starten
+            </button>
+
+            <Link
+              href="/fuer-firmen"
+              className="rounded-3xl border border-white/15 px-8 py-4 text-center font-bold text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Sichtbar werden
             </Link>
           </div>
         </section>
@@ -221,7 +357,13 @@ function PortalCard({
           <p className="text-sm font-bold text-slate-200">{secondaryText}</p>
         </div>
 
-        <div className="mt-7 inline-flex rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 transition group-hover:bg-cyan-300">
+        <div
+          className={`mt-7 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-slate-950 transition ${
+            isEvents
+              ? "bg-white group-hover:bg-amber-300"
+              : "bg-white group-hover:bg-cyan-300"
+          }`}
+        >
           {primaryAction}
         </div>
       </div>
@@ -237,10 +379,34 @@ function InfoCard({
   description: string;
 }) {
   return (
-    <article className="rounded-[1.5rem] border border-white/10 bg-white/[0.05] p-5 shadow-xl shadow-slate-950/20">
-      <h3 className="text-xl font-black">{title}</h3>
+    <article className="rounded-[1.5rem] border border-white/10 bg-slate-950/50 p-6 shadow-xl shadow-slate-950/20 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.08]">
+      <h3 className="text-2xl font-black">{title}</h3>
 
-      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+      <p className="mt-3 leading-7 text-slate-400">{description}</p>
+    </article>
+  );
+}
+
+function BusinessCard({
+  title,
+  description,
+  amber = false,
+}: {
+  title: string;
+  description: string;
+  amber?: boolean;
+}) {
+  return (
+    <article className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
+      <h3
+        className={`text-2xl font-black ${
+          amber ? "text-amber-100" : "text-cyan-100"
+        }`}
+      >
+        {title}
+      </h3>
+
+      <p className="mt-2 text-slate-300">{description}</p>
     </article>
   );
 }
