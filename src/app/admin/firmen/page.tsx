@@ -23,6 +23,8 @@ import {
 } from "@/data/plans";
 import type { Company } from "@/types/company";
 
+type DrawerMode = "closed" | "create" | "edit" | "details";
+
 type CompanyForm = {
   name: string;
   imageUrl: string;
@@ -56,6 +58,8 @@ const emptyForm: CompanyForm = {
   adDescription: "",
   adCta: "",
 };
+
+const companiesPerPage = 25;
 
 function getPlanClassName(plan: string | undefined) {
   if (plan === "starter") {
@@ -114,6 +118,9 @@ function getCompanySearchText(company: Company) {
     ...getDisplayedSubCategories(company),
     ...company.tags,
     ...company.searchTerms,
+    company.email,
+    company.phone,
+    company.website,
     company.ad?.title ?? "",
     company.ad?.description ?? "",
     company.ad?.cta ?? "",
@@ -122,12 +129,32 @@ function getCompanySearchText(company: Company) {
     .toLowerCase();
 }
 
+function getPartnerPath(company: Company) {
+  if (!canCompanyUsePartnerDashboard(company.plan)) {
+    return "";
+  }
+
+  if (!company.accessToken) {
+    return "";
+  }
+
+  return `/partner/${company.accessToken}`;
+}
+
 export default function AdminCompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [form, setForm] = useState<CompanyForm>(emptyForm);
+
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(
+    null
+  );
   const [editingCompanyId, setEditingCompanyId] = useState<string | null>(null);
+
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState("");
+  const [selectedVisibilityFilter, setSelectedVisibilityFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -138,7 +165,23 @@ export default function AdminCompaniesPage() {
     null
   );
 
-  const isEditing = Boolean(editingCompanyId);
+  const isEditing = drawerMode === "edit" && Boolean(editingCompanyId);
+
+  useEffect(() => {
+    loadCompanies();
+  }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [companySearchQuery, selectedPlanFilter, selectedVisibilityFilter]);
+
+  const selectedCompany = useMemo(() => {
+    if (!selectedCompanyId) {
+      return null;
+    }
+
+    return companies.find((company) => company.id === selectedCompanyId) ?? null;
+  }, [companies, selectedCompanyId]);
 
   const availableSubCategories = useMemo(() => {
     const baseSubCategories = getSubcategoriesForMainCategory(form.mainCategory);
@@ -153,31 +196,65 @@ export default function AdminCompaniesPage() {
   const filteredCompanies = useMemo(() => {
     const normalizedSearchQuery = companySearchQuery.trim().toLowerCase();
 
-    return companies.filter((company) => {
-      const matchesSearch =
-        !normalizedSearchQuery ||
-        getCompanySearchText(company).includes(normalizedSearchQuery);
+    return companies
+      .filter((company) => {
+        const matchesSearch =
+          !normalizedSearchQuery ||
+          getCompanySearchText(company).includes(normalizedSearchQuery);
 
-      const matchesPlan =
-        !selectedPlanFilter || company.plan === selectedPlanFilter;
+        const matchesPlan =
+          !selectedPlanFilter || company.plan === selectedPlanFilter;
 
-      return matchesSearch && matchesPlan;
-    });
-  }, [companies, companySearchQuery, selectedPlanFilter]);
+        const matchesVisibility =
+          !selectedVisibilityFilter ||
+          (selectedVisibilityFilter === "with-image" &&
+            Boolean(company.imageUrl)) ||
+          (selectedVisibilityFilter === "without-image" && !company.imageUrl) ||
+          (selectedVisibilityFilter === "with-ad" && Boolean(company.ad)) ||
+          (selectedVisibilityFilter === "with-dashboard" &&
+            canCompanyUsePartnerDashboard(company.plan)) ||
+          (selectedVisibilityFilter === "without-dashboard" &&
+            !canCompanyUsePartnerDashboard(company.plan));
+
+        return matchesSearch && matchesPlan && matchesVisibility;
+      })
+      .sort((firstCompany, secondCompany) =>
+        firstCompany.name.localeCompare(secondCompany.name)
+      );
+  }, [
+    companies,
+    companySearchQuery,
+    selectedPlanFilter,
+    selectedVisibilityFilter,
+  ]);
+
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredCompanies.length / companiesPerPage)
+  );
+
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+
+  const paginatedCompanies = filteredCompanies.slice(
+    (safeCurrentPage - 1) * companiesPerPage,
+    safeCurrentPage * companiesPerPage
+  );
 
   const companiesWithAds = companies.filter((company) => company.ad);
   const companiesWithImages = companies.filter((company) => company.imageUrl);
-  const premiumCompanies = companies.filter(
-    (company) => company.plan === "premium"
-  );
   const starterCompanies = companies.filter(
     (company) => company.plan === "starter"
   );
   const proCompanies = companies.filter((company) => company.plan === "pro");
+  const premiumCompanies = companies.filter(
+    (company) => company.plan === "premium"
+  );
+  const dashboardCompanies = companies.filter((company) =>
+    canCompanyUsePartnerDashboard(company.plan)
+  );
 
-  useEffect(() => {
-    loadCompanies();
-  }, []);
+  const hasActiveFilters =
+    companySearchQuery || selectedPlanFilter || selectedVisibilityFilter;
 
   async function loadCompanies() {
     try {
@@ -252,6 +329,13 @@ export default function AdminCompaniesPage() {
     });
   }
 
+  function resetFilters() {
+    setCompanySearchQuery("");
+    setSelectedPlanFilter("");
+    setSelectedVisibilityFilter("");
+    setCurrentPage(1);
+  }
+
   async function uploadCompanyImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
 
@@ -310,32 +394,17 @@ export default function AdminCompaniesPage() {
     updateField("imageUrl", "");
   }
 
-  function getPartnerPath(company: Company) {
-    if (!canCompanyUsePartnerDashboard(company.plan)) {
-      return "";
-    }
-
-    if (!company.accessToken) {
-      return "";
-    }
-
-    return `/partner/${company.accessToken}`;
-  }
-
   async function copyPartnerLink(company: Company) {
-    if (!canCompanyUsePartnerDashboard(company.plan)) {
+    const partnerPath = getPartnerPath(company);
+
+    if (!partnerPath) {
       setErrorMessage(
         "Dieses Paket hat keinen Partner-Zugang. Partner-Dashboard ist erst ab Pro verfügbar."
       );
       return;
     }
 
-    if (!company.accessToken) {
-      setErrorMessage("Für diese Firma wurde noch kein Partner-Link erstellt.");
-      return;
-    }
-
-    const partnerLink = `${window.location.origin}/partner/${company.accessToken}`;
+    const partnerLink = `${window.location.origin}${partnerPath}`;
 
     try {
       await navigator.clipboard.writeText(partnerLink);
@@ -347,6 +416,69 @@ export default function AdminCompaniesPage() {
     } catch {
       setErrorMessage("Partner-Link konnte nicht kopiert werden.");
     }
+  }
+
+  function openCreateDrawer() {
+    setForm(emptyForm);
+    setEditingCompanyId(null);
+    setSelectedCompanyId(null);
+    setDrawerMode("create");
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function openDetailsDrawer(company: Company) {
+    setSelectedCompanyId(company.id);
+    setEditingCompanyId(null);
+    setDrawerMode("details");
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function openEditDrawer(company: Company) {
+    const existingSubCategories =
+      company.subCategories && company.subCategories.length > 0
+        ? company.subCategories
+        : [company.subCategory || company.category].filter(Boolean);
+
+    const fallbackMainCategory =
+      company.mainCategory ||
+      findMainCategoryForSubCategory(existingSubCategories[0] || "") ||
+      "";
+
+    setEditingCompanyId(company.id);
+    setSelectedCompanyId(company.id);
+    setDrawerMode("edit");
+
+    setForm({
+      name: company.name,
+      imageUrl: company.imageUrl || "",
+      plan: company.plan || "pilot",
+      mainCategory: fallbackMainCategory,
+      subCategories: existingSubCategories,
+      city: company.city,
+      phone: company.phone,
+      email: company.email,
+      website: company.website,
+      description: company.description,
+      tags: company.tags.join(", "),
+      adTitle: canCompanyUseAdvertising(company.plan)
+        ? company.ad?.title ?? ""
+        : "",
+      adDescription: canCompanyUseAdvertising(company.plan)
+        ? company.ad?.description ?? ""
+        : "",
+      adCta: canCompanyUseAdvertising(company.plan) ? company.ad?.cta ?? "" : "",
+    });
+
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function closeDrawer() {
+    setDrawerMode("closed");
+    setEditingCompanyId(null);
+    setForm(emptyForm);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -450,6 +582,8 @@ export default function AdminCompaniesPage() {
 
       setForm(emptyForm);
       setEditingCompanyId(null);
+      setSelectedCompanyId(savedCompany.id);
+      setDrawerMode("details");
 
       setTimeout(() => {
         setSuccessMessage("");
@@ -463,56 +597,6 @@ export default function AdminCompaniesPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  function startEditingCompany(company: Company) {
-    const existingSubCategories =
-      company.subCategories && company.subCategories.length > 0
-        ? company.subCategories
-        : [company.subCategory || company.category].filter(Boolean);
-
-    const fallbackMainCategory =
-      company.mainCategory ||
-      findMainCategoryForSubCategory(existingSubCategories[0] || "") ||
-      "";
-
-    setEditingCompanyId(company.id);
-
-    setForm({
-      name: company.name,
-      imageUrl: company.imageUrl || "",
-      plan: company.plan || "pilot",
-      mainCategory: fallbackMainCategory,
-      subCategories: existingSubCategories,
-      city: company.city,
-      phone: company.phone,
-      email: company.email,
-      website: company.website,
-      description: company.description,
-      tags: company.tags.join(", "),
-      adTitle: canCompanyUseAdvertising(company.plan)
-        ? company.ad?.title ?? ""
-        : "",
-      adDescription: canCompanyUseAdvertising(company.plan)
-        ? company.ad?.description ?? ""
-        : "",
-      adCta: canCompanyUseAdvertising(company.plan) ? company.ad?.cta ?? "" : "",
-    });
-
-    setSuccessMessage("");
-    setErrorMessage("");
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  }
-
-  function cancelEditing() {
-    setEditingCompanyId(null);
-    setForm(emptyForm);
-    setSuccessMessage("");
-    setErrorMessage("");
   }
 
   async function deleteCompany(id: string, name: string) {
@@ -545,8 +629,9 @@ export default function AdminCompaniesPage() {
         currentCompanies.filter((company) => company.id !== id)
       );
 
-      if (editingCompanyId === id) {
-        cancelEditing();
+      if (selectedCompanyId === id) {
+        closeDrawer();
+        setSelectedCompanyId(null);
       }
 
       setSuccessMessage("Firma wurde erfolgreich gelöscht.");
@@ -577,577 +662,832 @@ export default function AdminCompaniesPage() {
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
             Firmen{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              verwalten
+              Tabelle
             </span>
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Erfasse, bearbeite und lösche Firmenprofile, Pakete,
-            Suchbegriffe, Kategorien, Bilder, Werbeanzeigen und Partner-Zugänge
-            ab Pro.
+            Neuer Ansatz: volle Tabellenansicht für viele Firmen. Details und
+            Bearbeitung öffnen sich separat im Drawer.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadCompanies}
-          disabled={isLoading}
-          className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoading ? "Lädt..." : "Aktualisieren"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={openCreateDrawer}
+            className="rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
+          >
+            Neue Firma
+          </button>
+
+          <button
+            type="button"
+            onClick={loadCompanies}
+            disabled={isLoading}
+            className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? "Lädt..." : "Aktualisieren"}
+          </button>
+        </div>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard
-          title="Firmen"
-          value={companies.length.toString()}
-          description={`${companiesWithImages.length} mit Titelbild`}
-        />
-
-        <AdminStatCard
-          title="Starter"
-          value={starterCompanies.length.toString()}
-          description="Ohne Leads / Dashboard"
-        />
-
-        <AdminStatCard
-          title="Pro"
-          value={proCompanies.length.toString()}
-          description="Mit Leads und Dashboard"
-        />
-
-        <AdminStatCard
-          title="Premium"
-          value={premiumCompanies.length.toString()}
-          description={`${companiesWithAds.length} Firmen mit Werbung`}
-        />
+      <div className="mt-8 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <CompactMetric label="Alle" value={companies.length} />
+        <CompactMetric label="Starter" value={starterCompanies.length} />
+        <CompactMetric label="Pro" value={proCompanies.length} />
+        <CompactMetric label="Premium" value={premiumCompanies.length} />
+        <CompactMetric label="Dashboard" value={dashboardCompanies.length} />
+        <CompactMetric label="Werbung" value={companiesWithAds.length} />
+        <CompactMetric label="Bilder" value={companiesWithImages.length} />
       </div>
 
       {successMessage && (
-        <div className="mt-8 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
+        <div className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
           {successMessage}
         </div>
       )}
 
       {errorMessage && (
-        <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
+        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
           {errorMessage}
         </div>
       )}
 
-      <div className="mt-10 grid gap-8 xl:grid-cols-[0.95fr_1.15fr]">
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div>
-              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Formular
-              </p>
+      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+          <div>
+            <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+              Datenbank
+            </p>
 
-              <h2 className="mt-2 text-3xl font-black">
-                {isEditing ? "Firma bearbeiten" : "Firma hinzufügen"}
-              </h2>
+            <h2 className="mt-2 text-3xl font-black">
+              Firmenliste
+            </h2>
 
-              <p className="mt-3 text-slate-400">
-                {isEditing
-                  ? "Bearbeite die ausgewählte Firma und speichere die Änderungen."
-                  : "Trage eine regionale Firma mit Paket, Hauptkategorie und mehreren Unterkategorien ein."}
-              </p>
-            </div>
-
-            {isEditing && (
-              <button
-                type="button"
-                onClick={cancelEditing}
-                className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
-              >
-                Abbrechen
-              </button>
-            )}
+            <p className="mt-2 text-sm text-slate-400">
+              Für grosse Datenmengen: kompakt, filterbar und mit Pagination.
+            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <InputField
-              label="Firmenname"
-              value={form.name}
-              onChange={(value) => updateField("name", value)}
-              placeholder="Zum Beispiel: Auto Meier AG"
-              required
-            />
-
-            <ImageUploadField
-              imageUrl={form.imageUrl}
-              isUploading={isUploadingImage}
-              onUpload={uploadCompanyImage}
-              onRemove={removeCompanyImage}
-            />
-
-            <PlanSelectField
-              label="Paket"
-              value={form.plan}
-              onChange={updatePlan}
-            />
-
-            {!canCompanyUsePartnerDashboard(form.plan) && (
-              <div className="rounded-3xl border border-blue-300/20 bg-blue-300/10 p-5">
-                <p className="font-black text-blue-100">
-                  Starter: kein Partner-Dashboard
-                </p>
-
-                <p className="mt-2 text-sm text-slate-300">
-                  Dieses Paket erstellt keinen Partner-Link, kein
-                  Business-Dashboard und keine Locario-Leadverwaltung. Leads und
-                  Dashboard sind erst ab Pro verfügbar.
-                </p>
-              </div>
-            )}
-
-            {canCompanyUsePartnerDashboard(form.plan) && (
-              <div className="rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-5">
-                <p className="font-black text-emerald-100">
-                  Partner-Zugang aktiv
-                </p>
-
-                <p className="mt-2 text-sm text-slate-300">
-                  Dieses Paket erhält einen Partner-Link, ein Dashboard und kann
-                  Locario-Leads empfangen.
-                </p>
-              </div>
-            )}
-
-            <SelectField
-              label="Hauptkategorie"
-              value={form.mainCategory}
-              onChange={updateMainCategory}
-              placeholder="Hauptkategorie auswählen"
-              options={mainCategories}
-              required
-            />
-
-            <MultiSelectField
-              label="Unterkategorien"
-              values={form.subCategories}
-              options={availableSubCategories}
-              disabled={!form.mainCategory}
-              emptyMessage={
-                form.mainCategory
-                  ? "Keine Unterkategorien vorhanden."
-                  : "Wähle zuerst eine Hauptkategorie."
-              }
-              onToggle={toggleSubCategory}
-            />
-
-            <InputField
-              label="Stadt / Region"
-              value={form.city}
-              onChange={(value) => updateField("city", value)}
-              placeholder="Zum Beispiel: Bern"
-              required
-            />
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <InputField
-                label="Telefon"
-                value={form.phone}
-                onChange={(value) => updateField("phone", value)}
-                placeholder="+41 31 000 00 00"
-              />
-
-              <InputField
-                label="E-Mail"
-                value={form.email}
-                onChange={(value) => updateField("email", value)}
-                placeholder="info@firma.ch"
-              />
-            </div>
-
-            <InputField
-              label="Website"
-              value={form.website}
-              onChange={(value) => updateField("website", value)}
-              placeholder="https://www.firma.ch"
-            />
-
-            <TextareaField
-              label="Beschreibung"
-              value={form.description}
-              onChange={(value) => updateField("description", value)}
-              placeholder="Beschreibe kurz, was die Firma anbietet."
-              required
-              rows={5}
-            />
-
-            <InputField
-              label="Suchbegriffe"
-              value={form.tags}
-              onChange={(value) => updateField("tags", value)}
-              placeholder="Garage, Occasionen, Neuwagen, Lackiererei"
-              required
-            />
-
-            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-              <h3 className="text-xl font-black text-cyan-100">
-                Werbeanzeige / Angebot
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-300">
-                Werbeanzeigen sind erst ab Pro verfügbar. Wenn alle Werbefelder
-                leer sind, wird keine Werbung gespeichert.
-              </p>
-
-              {!canCompanyUseAdvertising(form.plan) && (
-                <div className="mt-4 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-                  Dieses Paket kann keine Werbeanzeigen nutzen. Werbung ist erst
-                  ab Pro verfügbar. Eingetragene Werbefelder werden bei Starter
-                  nicht gespeichert.
-                </div>
-              )}
-
-              {canCompanyUseAdvertising(form.plan) && (
-                <div className="mt-5 space-y-5">
-                  <InputField
-                    label="Werbetitel"
-                    value={form.adTitle}
-                    onChange={(value) => updateField("adTitle", value)}
-                    placeholder="Zum Beispiel: Gratis Fahrzeugcheck"
-                  />
-
-                  <TextareaField
-                    label="Werbetext"
-                    value={form.adDescription}
-                    onChange={(value) => updateField("adDescription", value)}
-                    placeholder="Beschreibe das Angebot kurz und verkaufsstark."
-                    rows={4}
-                  />
-
-                  <InputField
-                    label="Button-Text"
-                    value={form.adCta}
-                    onChange={(value) => updateField("adCta", value)}
-                    placeholder="Zum Beispiel: Angebot anfragen"
-                  />
-                </div>
-              )}
-            </div>
-
+          {hasActiveFilters && (
             <button
-              type="submit"
-              disabled={isSubmitting || isUploadingImage}
-              className="w-full rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              type="button"
+              onClick={resetFilters}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
             >
-              {isSubmitting
-                ? isEditing
-                  ? "Änderungen werden gespeichert..."
-                  : "Wird gespeichert..."
-                : isEditing
-                  ? "Änderungen speichern"
-                  : "Firma speichern"}
+              Filter zurücksetzen
             </button>
-          </form>
-        </section>
+          )}
+        </div>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-            <div>
-              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Übersicht
-              </p>
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+          <InputField
+            label="Suche"
+            value={companySearchQuery}
+            onChange={setCompanySearchQuery}
+            placeholder="Firma suchen: Name, Ort, Kategorie, Suchbegriff..."
+          />
 
-              <h2 className="mt-2 text-3xl font-black">
-                Firmen aus der Datenbank
-              </h2>
-
-              <p className="mt-3 text-slate-400">
-                Suche, filtere und verwalte gespeicherte Firmenprofile.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_14rem]">
-            <InputField
-              label="Firmen suchen"
-              value={companySearchQuery}
-              onChange={setCompanySearchQuery}
-              placeholder="Name, Stadt, Kategorie, Suchbegriff..."
-            />
-
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_18rem]">
             <PlanFilterSelect
               label="Paket"
               value={selectedPlanFilter}
               onChange={setSelectedPlanFilter}
             />
-          </div>
 
-          <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
+            <VisibilityFilterSelect
+              label="Filter"
+              value={selectedVisibilityFilter}
+              onChange={setSelectedVisibilityFilter}
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 md:flex-row md:items-center">
+          <p>
             <span className="font-black text-white">
               {filteredCompanies.length}
             </span>{" "}
             von{" "}
             <span className="font-black text-white">{companies.length}</span>{" "}
-            Firmen werden angezeigt.
+            Firmen gefunden.
+          </p>
+
+          <p className="text-slate-500">
+            Seite {safeCurrentPage} von {pageCount} · {companiesPerPage} pro
+            Seite
+          </p>
+        </div>
+
+        {isLoading && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Firmen werden geladen...
           </div>
+        )}
 
-          {isLoading && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Firmen werden geladen...
+        {!isLoading && companies.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Noch keine Firmen in der Datenbank gespeichert.
+          </div>
+        )}
+
+        {!isLoading &&
+          companies.length > 0 &&
+          filteredCompanies.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+              Keine Firma passt zu deinem Filter.
             </div>
           )}
 
-          {!isLoading && companies.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Noch keine Firmen in der Datenbank gespeichert.
-            </div>
-          )}
+        {!isLoading && paginatedCompanies.length > 0 && (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+            <div className="overflow-x-auto">
+              <table className="min-w-[1050px] w-full border-collapse text-left text-sm">
+                <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Firma</th>
+                    <th className="px-4 py-3">Ort</th>
+                    <th className="px-4 py-3">Paket</th>
+                    <th className="px-4 py-3">Features</th>
+                    <th className="px-4 py-3">Kontakt</th>
+                    <th className="px-4 py-3 text-right">Aktionen</th>
+                  </tr>
+                </thead>
 
-          {!isLoading &&
-            companies.length > 0 &&
-            filteredCompanies.length === 0 && (
-              <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-                Keine Firma passt zu deinem Filter.
-              </div>
-            )}
+                <tbody>
+                  {paginatedCompanies.map((company) => {
+                    const displayedMainCategory =
+                      getDisplayedMainCategory(company);
+                    const displayedSubCategories =
+                      getDisplayedSubCategories(company);
+                    const partnerPath = getPartnerPath(company);
+                    const hasPartnerDashboard = canCompanyUsePartnerDashboard(
+                      company.plan
+                    );
+                    const hasLeadAccess = canCompanyReceiveLeads(company.plan);
+                    const hasAdvertisingAccess = canCompanyUseAdvertising(
+                      company.plan
+                    );
 
-          {!isLoading && filteredCompanies.length > 0 && (
-            <div className="mt-8 space-y-4">
-              {filteredCompanies.map((company) => {
-                const displayedMainCategory = getDisplayedMainCategory(company);
-                const displayedSubCategories =
-                  getDisplayedSubCategories(company);
-                const partnerPath = getPartnerPath(company);
-                const isCurrentCompany = editingCompanyId === company.id;
-                const hasPartnerDashboard = canCompanyUsePartnerDashboard(
-                  company.plan
-                );
-                const hasLeadAccess = canCompanyReceiveLeads(company.plan);
-                const hasAdvertisingAccess = canCompanyUseAdvertising(
-                  company.plan
-                );
-
-                return (
-                  <article
-                    key={company.id}
-                    className={`overflow-hidden rounded-3xl border transition ${
-                      isCurrentCompany
-                        ? "border-cyan-300/50 bg-cyan-300/10"
-                        : "border-white/10 bg-slate-950/60 hover:border-cyan-300/30 hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <div className="relative h-44 overflow-hidden">
-                      {company.imageUrl ? (
-                        <img
-                          src={company.imageUrl}
-                          alt={company.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-cyan-400/25 via-blue-500/20 to-slate-950" />
-                      )}
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent" />
-
-                      <div className="absolute bottom-5 left-5 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-xs font-black text-cyan-100 backdrop-blur">
-                          {displayedMainCategory}
-                        </span>
-
-                        <span
-                          className={`rounded-full border px-3 py-1 text-xs font-black backdrop-blur ${getPlanClassName(
-                            company.plan
-                          )}`}
-                        >
-                          {getCompanyPlanLabel(company.plan)}
-                        </span>
-
-                        {company.imageUrl && (
-                          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100 backdrop-blur">
-                            Bild
-                          </span>
-                        )}
-
-                        {company.ad && hasAdvertisingAccess && (
-                          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100 backdrop-blur">
-                            Werbung
-                          </span>
-                        )}
-
-                        {hasLeadAccess && (
-                          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100 backdrop-blur">
-                            Leads
-                          </span>
-                        )}
-
-                        {hasPartnerDashboard && (
-                          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100 backdrop-blur">
-                            Dashboard
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-5">
-                      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                        <div className="flex-1">
-                          <h3 className="text-2xl font-black tracking-tight">
+                    return (
+                      <tr
+                        key={company.id}
+                        className="border-b border-white/10 bg-slate-950/35 transition last:border-b-0 hover:bg-white/[0.04]"
+                      >
+                        <td className="max-w-[28rem] px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={() => openDetailsDrawer(company)}
+                            className="block max-w-full truncate text-left text-base font-black text-white transition hover:text-cyan-100"
+                          >
                             {company.name}
-                          </h3>
-
-                          <p className="mt-1 text-sm text-slate-400">
-                            {company.city}
-                          </p>
-
-                          <p className="mt-2 text-xs text-slate-500">
-                            {getCompanyPlanDescription(company.plan)}
-                          </p>
-
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {displayedSubCategories.map((subCategory) => (
-                              <span
-                                key={subCategory}
-                                className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"
-                              >
-                                {subCategory}
-                              </span>
-                            ))}
-                          </div>
-
-                          <p className="mt-4 text-slate-300">
-                            {company.description}
-                          </p>
-
-                          {!hasPartnerDashboard && (
-                            <div className="mt-5 rounded-3xl border border-blue-300/20 bg-blue-300/10 p-4">
-                              <p className="text-xs font-black uppercase tracking-wide text-blue-100">
-                                Kein Partner-Zugang
-                              </p>
-
-                              <p className="mt-2 text-sm text-slate-300">
-                                Dieses Paket hat kein Business-Dashboard und
-                                keine Leadverwaltung. Partner-Zugang ist erst ab
-                                Pro verfügbar.
-                              </p>
-                            </div>
-                          )}
-
-                          {partnerPath && (
-                            <div className="mt-5 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-                              <p className="text-xs font-black uppercase tracking-wide text-emerald-100">
-                                Partner-Zugang
-                              </p>
-
-                              <p className="mt-2 break-all text-sm text-slate-300">
-                                {partnerPath}
-                              </p>
-
-                              <p className="mt-3 text-xs text-emerald-100">
-                                Dieser Link ist vertraulich. Sende ihn nur an
-                                die jeweilige Firma.
-                              </p>
-
-                              <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                                <button
-                                  type="button"
-                                  onClick={() => copyPartnerLink(company)}
-                                  className="rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200"
-                                >
-                                  Link kopieren
-                                </button>
-
-                                <Link
-                                  href={partnerPath}
-                                  className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
-                                >
-                                  Öffnen
-                                </Link>
-                              </div>
-                            </div>
-                          )}
-
-                          {company.ad && hasAdvertisingAccess && (
-                            <div className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
-                              <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
-                                Aktive Werbung
-                              </p>
-
-                              <h4 className="mt-2 font-black">
-                                {company.ad.title}
-                              </h4>
-
-                              <p className="mt-1 text-sm text-slate-300">
-                                {company.ad.description}
-                              </p>
-
-                              <p className="mt-3 text-sm font-black text-cyan-100">
-                                Button: {company.ad.cta}
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {company.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-row gap-3 md:flex-col">
-                          <button
-                            type="button"
-                            onClick={() => startEditingCompany(company)}
-                            className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
-                          >
-                            Bearbeiten
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteCompany(company.id, company.name)
-                            }
-                            disabled={deletingCompanyId === company.id}
-                            className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {displayedMainCategory} ·{" "}
+                            {displayedSubCategories.slice(0, 3).join(", ") ||
+                              "Keine Unterkategorie"}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 text-slate-300">
+                          {company.city}
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
+                              company.plan
+                            )}`}
                           >
-                            {deletingCompanyId === company.id
-                              ? "Löscht..."
-                              : "Löschen"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                            {getCompanyPlanLabel(company.plan)}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap gap-1">
+                            {company.imageUrl && <TinyDot label="Bild" />}
+                            {company.ad && hasAdvertisingAccess && (
+                              <TinyDot label="Werbung" />
+                            )}
+                            {hasLeadAccess && <TinyDot label="Leads" />}
+                            {hasPartnerDashboard && (
+                              <TinyDot label="Dashboard" />
+                            )}
+                            {!hasPartnerDashboard && (
+                              <TinyDot label="Starter" />
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="max-w-[16rem] px-4 py-4 text-slate-400">
+                          <p className="truncate">
+                            {company.email || "Keine E-Mail"}
+                          </p>
+
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {company.phone || "Kein Telefon"}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openDetailsDrawer(company)}
+                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                            >
+                              Details
+                            </button>
+
+                            <Link
+                              href={`/firmen/${company.id}`}
+                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                            >
+                              Öffnen
+                            </Link>
+
+                            {partnerPath && (
+                              <button
+                                type="button"
+                                onClick={() => copyPartnerLink(company)}
+                                className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10"
+                              >
+                                Partner
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => openEditDrawer(company)}
+                              className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        )}
+
+        {!isLoading && filteredCompanies.length > companiesPerPage && (
+          <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() =>
+                setCurrentPage((page) => Math.max(1, page - 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Zurück
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              Seite{" "}
+              <span className="font-black text-white">{safeCurrentPage}</span>{" "}
+              von <span className="font-black text-white">{pageCount}</span>
+            </p>
+
+            <button
+              type="button"
+              disabled={safeCurrentPage >= pageCount}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(pageCount, page + 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter
+            </button>
+          </div>
+        )}
+      </section>
+
+      <CompanyDrawer
+        mode={drawerMode}
+        company={selectedCompany}
+        form={form}
+        isEditing={isEditing}
+        isSubmitting={isSubmitting}
+        isUploadingImage={isUploadingImage}
+        availableSubCategories={availableSubCategories}
+        deletingCompanyId={deletingCompanyId}
+        onClose={closeDrawer}
+        onSubmit={handleSubmit}
+        onUpdateField={updateField}
+        onUpdatePlan={updatePlan}
+        onUpdateMainCategory={updateMainCategory}
+        onToggleSubCategory={toggleSubCategory}
+        onUploadImage={uploadCompanyImage}
+        onRemoveImage={removeCompanyImage}
+        onEditCompany={openEditDrawer}
+        onDeleteCompany={deleteCompany}
+        onCopyPartnerLink={copyPartnerLink}
+      />
     </section>
   );
 }
 
-function AdminStatCard({
-  title,
-  value,
-  description,
+function CompanyDrawer({
+  mode,
+  company,
+  form,
+  isEditing,
+  isSubmitting,
+  isUploadingImage,
+  availableSubCategories,
+  deletingCompanyId,
+  onClose,
+  onSubmit,
+  onUpdateField,
+  onUpdatePlan,
+  onUpdateMainCategory,
+  onToggleSubCategory,
+  onUploadImage,
+  onRemoveImage,
+  onEditCompany,
+  onDeleteCompany,
+  onCopyPartnerLink,
 }: {
-  title: string;
-  value: string;
-  description: string;
+  mode: DrawerMode;
+  company: Company | null;
+  form: CompanyForm;
+  isEditing: boolean;
+  isSubmitting: boolean;
+  isUploadingImage: boolean;
+  availableSubCategories: string[];
+  deletingCompanyId: string | null;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onUpdateField: (field: keyof CompanyForm, value: string) => void;
+  onUpdatePlan: (value: string) => void;
+  onUpdateMainCategory: (value: string) => void;
+  onToggleSubCategory: (value: string) => void;
+  onUploadImage: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemoveImage: () => void;
+  onEditCompany: (company: Company) => void;
+  onDeleteCompany: (id: string, name: string) => void;
+  onCopyPartnerLink: (company: Company) => void;
 }) {
+  if (mode === "closed") {
+    return null;
+  }
+
+  const isFormMode = mode === "create" || mode === "edit";
+
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm">
+      <div className="flex min-h-screen justify-end">
+        <aside className="h-screen w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl shadow-slate-950/50 md:p-8">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-6 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+                {isFormMode ? "Bearbeitung" : "Firmendetails"}
+              </p>
+
+              <h2 className="mt-2 text-4xl font-black tracking-tight">
+                {mode === "create"
+                  ? "Neue Firma erfassen"
+                  : mode === "edit"
+                    ? "Firma bearbeiten"
+                    : company?.name || "Firma"}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-slate-400">
+                {isFormMode
+                  ? "Erfasse oder bearbeite alle wichtigen Firmendaten getrennt von der Tabelle."
+                  : "Details, Paketlogik, Kontakt und Aktionen zu dieser Firma."}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Schliessen
+            </button>
+          </div>
+
+          {isFormMode && (
+            <form onSubmit={onSubmit} className="mt-8 grid gap-6 xl:grid-cols-3">
+              <div className="space-y-5">
+                <InputField
+                  label="Firmenname"
+                  value={form.name}
+                  onChange={(value) => onUpdateField("name", value)}
+                  placeholder="Zum Beispiel: Auto Meier AG"
+                  required
+                />
+
+                <PlanSelectField
+                  label="Paket"
+                  value={form.plan}
+                  onChange={onUpdatePlan}
+                />
+
+                {!canCompanyUsePartnerDashboard(form.plan) && (
+                  <InfoNotice
+                    title="Starter"
+                    description="Kein Partner-Link, kein Dashboard und keine Locario-Leads."
+                    variant="blue"
+                  />
+                )}
+
+                {canCompanyUsePartnerDashboard(form.plan) && (
+                  <InfoNotice
+                    title="Partner-Zugang"
+                    description="Partner-Link, Dashboard und Locario-Leads sind aktiv."
+                    variant="emerald"
+                  />
+                )}
+
+                <SelectField
+                  label="Hauptkategorie"
+                  value={form.mainCategory}
+                  onChange={onUpdateMainCategory}
+                  placeholder="Hauptkategorie auswählen"
+                  options={mainCategories}
+                  required
+                />
+
+                <MultiSelectField
+                  label="Unterkategorien"
+                  values={form.subCategories}
+                  options={availableSubCategories}
+                  disabled={!form.mainCategory}
+                  emptyMessage={
+                    form.mainCategory
+                      ? "Keine Unterkategorien vorhanden."
+                      : "Wähle zuerst eine Hauptkategorie."
+                  }
+                  onToggle={onToggleSubCategory}
+                />
+              </div>
+
+              <div className="space-y-5">
+                <ImageUploadField
+                  imageUrl={form.imageUrl}
+                  isUploading={isUploadingImage}
+                  onUpload={onUploadImage}
+                  onRemove={onRemoveImage}
+                />
+
+                <InputField
+                  label="Stadt / Region"
+                  value={form.city}
+                  onChange={(value) => onUpdateField("city", value)}
+                  placeholder="Zum Beispiel: Bern"
+                  required
+                />
+
+                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  <InputField
+                    label="Telefon"
+                    value={form.phone}
+                    onChange={(value) => onUpdateField("phone", value)}
+                    placeholder="+41 31 000 00 00"
+                  />
+
+                  <InputField
+                    label="E-Mail"
+                    value={form.email}
+                    onChange={(value) => onUpdateField("email", value)}
+                    placeholder="info@firma.ch"
+                  />
+                </div>
+
+                <InputField
+                  label="Website"
+                  value={form.website}
+                  onChange={(value) => onUpdateField("website", value)}
+                  placeholder="https://www.firma.ch"
+                />
+              </div>
+
+              <div className="space-y-5">
+                <TextareaField
+                  label="Beschreibung"
+                  value={form.description}
+                  onChange={(value) => onUpdateField("description", value)}
+                  placeholder="Beschreibe kurz, was die Firma anbietet."
+                  required
+                  rows={5}
+                />
+
+                <InputField
+                  label="Suchbegriffe"
+                  value={form.tags}
+                  onChange={(value) => onUpdateField("tags", value)}
+                  placeholder="Garage, Occasionen, Neuwagen, Lackiererei"
+                  required
+                />
+
+                <AdFields
+                  plan={form.plan}
+                  adTitle={form.adTitle}
+                  adDescription={form.adDescription}
+                  adCta={form.adCta}
+                  onChange={onUpdateField}
+                />
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploadingImage}
+                  className="w-full rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting
+                    ? isEditing
+                      ? "Änderungen werden gespeichert..."
+                      : "Wird gespeichert..."
+                    : isEditing
+                      ? "Änderungen speichern"
+                      : "Firma speichern"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {mode === "details" && company && (
+            <CompanyDetailsDrawer
+              company={company}
+              deletingCompanyId={deletingCompanyId}
+              onEditCompany={onEditCompany}
+              onDeleteCompany={onDeleteCompany}
+              onCopyPartnerLink={onCopyPartnerLink}
+            />
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function CompanyDetailsDrawer({
+  company,
+  deletingCompanyId,
+  onEditCompany,
+  onDeleteCompany,
+  onCopyPartnerLink,
+}: {
+  company: Company;
+  deletingCompanyId: string | null;
+  onEditCompany: (company: Company) => void;
+  onDeleteCompany: (id: string, name: string) => void;
+  onCopyPartnerLink: (company: Company) => void;
+}) {
+  const displayedMainCategory = getDisplayedMainCategory(company);
+  const displayedSubCategories = getDisplayedSubCategories(company);
+  const partnerPath = getPartnerPath(company);
+  const partnerDashboardAllowed = canCompanyUsePartnerDashboard(company.plan);
+  const leadsAllowed = canCompanyReceiveLeads(company.plan);
+  const advertisingAllowed = canCompanyUseAdvertising(company.plan);
+
+  return (
+    <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
+      <div className="space-y-5">
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60">
+          {company.imageUrl ? (
+            <img
+              src={company.imageUrl}
+              alt={company.name}
+              className="h-52 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-44 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
+              Kein Bild
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Aktionen
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            <button
+              type="button"
+              onClick={() => onEditCompany(company)}
+              className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+            >
+              Bearbeiten
+            </button>
+
+            {partnerPath && (
+              <button
+                type="button"
+                onClick={() => onCopyPartnerLink(company)}
+                className="rounded-2xl border border-emerald-300/30 px-4 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/10"
+              >
+                Partner-Link kopieren
+              </button>
+            )}
+
+            <Link
+              href={`/firmen/${company.id}`}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Öffentlich öffnen
+            </Link>
+
+            {company.website && (
+              <a
+                href={company.website}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              >
+                Website öffnen
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onDeleteCompany(company.id, company.name)}
+              disabled={deletingCompanyId === company.id}
+              className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deletingCompanyId === company.id ? "Löscht..." : "Firma löschen"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
+              company.plan
+            )}`}
+          >
+            {getCompanyPlanLabel(company.plan)}
+          </span>
+
+          {leadsAllowed && <MiniBadge label="Leads" />}
+          {partnerDashboardAllowed && <MiniBadge label="Dashboard" />}
+          {company.ad && advertisingAllowed && (
+            <MiniBadge label="Werbung" variant="emerald" />
+          )}
+        </div>
+
+        <h3 className="break-words text-4xl font-black">{company.name}</h3>
+
+        <p className="text-slate-400">
+          {company.city} · {displayedMainCategory}
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DetailBox title="Kategorie" value={displayedMainCategory} />
+
+          <DetailBox
+            title="Unterkategorien"
+            value={
+              displayedSubCategories.length > 0
+                ? displayedSubCategories.join(", ")
+                : "Keine Unterkategorie"
+            }
+          />
+
+          <DetailBox
+            title="Paketlogik"
+            value={getCompanyPlanDescription(company.plan)}
+          />
+
+          <DetailBox
+            title="Kontakt"
+            value={[
+              company.email || "Keine E-Mail",
+              company.phone || "Kein Telefon",
+            ].join(" · ")}
+          />
+
+          {partnerPath ? (
+            <DetailBox title="Partner-Link" value={partnerPath} />
+          ) : (
+            <DetailBox
+              title="Partner-Zugang"
+              value="Kein Partner-Zugang in diesem Paket."
+            />
+          )}
+
+          {company.ad && advertisingAllowed ? (
+            <DetailBox
+              title="Werbung"
+              value={`${company.ad.title} · ${company.ad.cta}`}
+            />
+          ) : (
+            <DetailBox title="Werbung" value="Keine aktive Werbeanzeige." />
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Beschreibung
+          </p>
+
+          <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-300">
+            {company.description}
+          </p>
+        </div>
+
+        {company.tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {company.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-2xl font-black text-cyan-200">{value}</p>
+    </div>
+  );
+}
+
+function TinyDot({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[0.65rem] font-black text-cyan-100">
+      {label}
+    </span>
+  );
+}
+
+function MiniBadge({
+  label,
+  variant = "cyan",
+}: {
+  label: string;
+  variant?: "cyan" | "emerald" | "blue";
+}) {
+  const className =
+    variant === "emerald"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : variant === "blue"
+        ? "border-blue-300/20 bg-blue-300/10 text-blue-100"
+        : "border-cyan-300/20 bg-cyan-300/10 text-cyan-100";
+
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-black ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function DetailBox({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {title}
       </p>
 
-      <p className="mt-4 text-5xl font-black text-cyan-200">{value}</p>
+      <p className="mt-2 break-words text-sm text-slate-300">{value}</p>
+    </div>
+  );
+}
 
-      <p className="mt-3 text-sm text-slate-300">{description}</p>
-    </article>
+function InfoNotice({
+  title,
+  description,
+  variant,
+}: {
+  title: string;
+  description: string;
+  variant: "blue" | "emerald";
+}) {
+  const className =
+    variant === "emerald"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : "border-blue-300/20 bg-blue-300/10 text-blue-100";
+
+  return (
+    <div className={`rounded-3xl border p-4 ${className}`}>
+      <p className="font-black">{title}</p>
+      <p className="mt-2 text-sm text-slate-300">{description}</p>
+    </div>
   );
 }
 
@@ -1163,33 +1503,26 @@ function ImageUploadField({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
-      <label className="text-sm font-bold text-slate-200">
-        Firmenbild / Titelbild
-      </label>
+    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+      <label className="text-sm font-bold text-slate-200">Firmenbild</label>
 
-      <p className="mt-2 text-sm text-slate-400">
-        Dieses Bild erscheint oben auf der Firmenkarte und später im
-        Firmenprofil. Erlaubt sind JPG, PNG und WebP bis 5 MB.
-      </p>
-
-      <div className="mt-5 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt="Firmenbild Vorschau"
-            className="h-52 w-full object-cover"
+            className="h-32 w-full object-cover"
           />
         ) : (
-          <div className="flex h-52 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
-            Noch kein Bild hochgeladen
+          <div className="flex h-28 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
+            Kein Bild
           </div>
         )}
       </div>
 
-      <div className="mt-5 grid gap-3 sm:flex">
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5">
-          {isUploading ? "Bild wird hochgeladen..." : "Bild hochladen"}
+      <div className="mt-4 grid gap-3 sm:flex">
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5">
+          {isUploading ? "Lädt..." : "Bild hochladen"}
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -1204,15 +1537,65 @@ function ImageUploadField({
             type="button"
             onClick={onRemove}
             disabled={isUploading}
-            className="rounded-2xl border border-red-400/30 px-5 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Bild entfernen
+            Entfernen
           </button>
         )}
       </div>
+    </div>
+  );
+}
 
-      {imageUrl && (
-        <p className="mt-4 break-all text-xs text-slate-500">{imageUrl}</p>
+function AdFields({
+  plan,
+  adTitle,
+  adDescription,
+  adCta,
+  onChange,
+}: {
+  plan: string;
+  adTitle: string;
+  adDescription: string;
+  adCta: string;
+  onChange: (field: keyof CompanyForm, value: string) => void;
+}) {
+  const advertisingAllowed = canCompanyUseAdvertising(plan);
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+      <h3 className="text-lg font-black text-cyan-100">Werbeanzeige</h3>
+
+      {!advertisingAllowed && (
+        <p className="mt-2 text-sm text-slate-400">
+          Dieses Paket kann keine Werbeanzeige nutzen.
+        </p>
+      )}
+
+      {advertisingAllowed && (
+        <div className="mt-4 space-y-4">
+          <InputField
+            label="Werbetitel"
+            value={adTitle}
+            onChange={(value) => onChange("adTitle", value)}
+            placeholder="Zum Beispiel: Gratis Fahrzeugcheck"
+          />
+
+          <TextareaField
+            label="Werbetext"
+            value={adDescription}
+            onChange={(value) => onChange("adDescription", value)}
+            placeholder="Beschreibe das Angebot kurz."
+            rows={3}
+          />
+
+          <InputField
+            label="Button-Text"
+            value={adCta}
+            onChange={(value) => onChange("adCta", value)}
+            placeholder="Zum Beispiel: Angebot anfragen"
+          />
+        </div>
       )}
     </div>
   );
@@ -1396,6 +1779,65 @@ function PlanFilterSelect({
   );
 }
 
+function VisibilityFilterSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const options = [
+    {
+      value: "",
+      label: "Alle",
+    },
+    {
+      value: "with-image",
+      label: "Mit Bild",
+    },
+    {
+      value: "without-image",
+      label: "Ohne Bild",
+    },
+    {
+      value: "with-ad",
+      label: "Mit Werbung",
+    },
+    {
+      value: "with-dashboard",
+      label: "Mit Dashboard",
+    },
+    {
+      value: "without-dashboard",
+      label: "Ohne Dashboard",
+    },
+  ];
+
+  return (
+    <div>
+      <label className="text-sm font-bold text-slate-200">{label}</label>
+
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-300"
+      >
+        {options.map((option) => (
+          <option
+            key={option.value}
+            value={option.value}
+            className="bg-slate-950 text-white"
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function MultiSelectField({
   label,
   values,
@@ -1421,7 +1863,7 @@ function MultiSelectField({
         )}
 
         {options.length > 0 && (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
             {options.map((option) => {
               const isSelected = values.includes(option);
 
@@ -1461,4 +1903,3 @@ function MultiSelectField({
     </div>
   );
 }
-

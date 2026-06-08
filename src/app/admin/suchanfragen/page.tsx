@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type SearchLog = {
@@ -29,6 +30,8 @@ type SearchLogStatsResponse = {
   acquisitionOpportunities: SearchLogStat[];
 };
 
+type AnalysisView = "opportunities" | "top" | "zero_logs" | "all_logs";
+
 const emptySearchStats: SearchLogStatsResponse = {
   totalSearches: 0,
   uniqueSearches: 0,
@@ -36,6 +39,35 @@ const emptySearchStats: SearchLogStatsResponse = {
   topSearches: [],
   acquisitionOpportunities: [],
 };
+
+const itemsPerPage = 25;
+
+const analysisViews: {
+  value: AnalysisView;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "opportunities",
+    label: "Akquise",
+    description: "Fehlende Anbieter",
+  },
+  {
+    value: "top",
+    label: "Top-Suchen",
+    description: "Häufige Nachfrage",
+  },
+  {
+    value: "zero_logs",
+    label: "0-Treffer",
+    description: "Einzelne Logs",
+  },
+  {
+    value: "all_logs",
+    label: "Suchlog",
+    description: "Alle Suchen",
+  },
+];
 
 function getSearchLogSearchText(searchLog: SearchLog) {
   return [
@@ -48,13 +80,67 @@ function getSearchLogSearchText(searchLog: SearchLog) {
     .toLowerCase();
 }
 
+function getSearchStatSearchText(item: SearchLogStat) {
+  return [
+    item.latestQuery,
+    item.normalizedQuery,
+    item.searchCount.toString(),
+    item.zeroResultCount.toString(),
+    item.latestResultCount.toString(),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getOpportunityLevel(item: SearchLogStat) {
+  if (item.zeroResultCount >= 5 || item.latestResultCount === 0) {
+    return "high";
+  }
+
+  if (item.averageResultCount <= 2) {
+    return "medium";
+  }
+
+  return "low";
+}
+
+function getOpportunityLabel(item: SearchLogStat) {
+  const level = getOpportunityLevel(item);
+
+  if (level === "high") {
+    return "Hohe Chance";
+  }
+
+  if (level === "medium") {
+    return "Prüfen";
+  }
+
+  return "Beobachten";
+}
+
+function getOpportunityClassName(item: SearchLogStat) {
+  const level = getOpportunityLevel(item);
+
+  if (level === "high") {
+    return "border-red-300/25 bg-red-300/10 text-red-100";
+  }
+
+  if (level === "medium") {
+    return "border-amber-300/25 bg-amber-300/10 text-amber-100";
+  }
+
+  return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+}
+
 export default function AdminSearchLogsPage() {
   const [searchLogs, setSearchLogs] = useState<SearchLog[]>([]);
   const [searchStats, setSearchStats] =
     useState<SearchLogStatsResponse>(emptySearchStats);
 
+  const [selectedView, setSelectedView] =
+    useState<AnalysisView>("opportunities");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedResultFilter, setSelectedResultFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -63,22 +149,9 @@ export default function AdminSearchLogsPage() {
     loadSearchData();
   }, []);
 
-  const filteredSearchLogs = useMemo(() => {
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-
-    return searchLogs.filter((searchLog) => {
-      const matchesSearch =
-        !normalizedSearchQuery ||
-        getSearchLogSearchText(searchLog).includes(normalizedSearchQuery);
-
-      const matchesResultFilter =
-        !selectedResultFilter ||
-        (selectedResultFilter === "zero" && searchLog.resultCount === 0) ||
-        (selectedResultFilter === "with_results" && searchLog.resultCount > 0);
-
-      return matchesSearch && matchesResultFilter;
-    });
-  }, [searchLogs, searchQuery, selectedResultFilter]);
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedView]);
 
   const zeroResultLogs = useMemo(() => {
     return searchLogs.filter((searchLog) => searchLog.resultCount === 0);
@@ -100,7 +173,71 @@ export default function AdminSearchLogsPage() {
     return Math.round((totalResults / searchLogs.length) * 10) / 10;
   }, [searchLogs]);
 
-  const hasActiveFilters = searchQuery || selectedResultFilter;
+  const statItems = useMemo(() => {
+    if (selectedView === "opportunities") {
+      return searchStats.acquisitionOpportunities;
+    }
+
+    if (selectedView === "top") {
+      return searchStats.topSearches;
+    }
+
+    return [];
+  }, [searchStats.acquisitionOpportunities, searchStats.topSearches, selectedView]);
+
+  const filteredStatItems = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+    return statItems.filter((item) => {
+      return (
+        !normalizedSearchQuery ||
+        getSearchStatSearchText(item).includes(normalizedSearchQuery)
+      );
+    });
+  }, [statItems, searchQuery]);
+
+  const filteredSearchLogs = useMemo(() => {
+    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+
+    return searchLogs
+      .filter((searchLog) => {
+        const matchesSearch =
+          !normalizedSearchQuery ||
+          getSearchLogSearchText(searchLog).includes(normalizedSearchQuery);
+
+        const matchesView =
+          selectedView === "all_logs" ||
+          (selectedView === "zero_logs" && searchLog.resultCount === 0);
+
+        return matchesSearch && matchesView;
+      })
+      .sort((firstLog, secondLog) => {
+        return (
+          new Date(secondLog.createdAt).getTime() -
+          new Date(firstLog.createdAt).getTime()
+        );
+      });
+  }, [searchLogs, searchQuery, selectedView]);
+
+  const activeItems =
+    selectedView === "opportunities" || selectedView === "top"
+      ? filteredStatItems
+      : filteredSearchLogs;
+
+  const pageCount = Math.max(1, Math.ceil(activeItems.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+
+  const paginatedStatItems = filteredStatItems.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
+
+  const paginatedSearchLogs = filteredSearchLogs.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
+
+  const hasActiveFilters = searchQuery || selectedView !== "opportunities";
 
   async function loadSearchData() {
     try {
@@ -141,7 +278,8 @@ export default function AdminSearchLogsPage() {
 
   function resetFilters() {
     setSearchQuery("");
-    setSelectedResultFilter("");
+    setSelectedView("opportunities");
+    setCurrentPage(1);
   }
 
   function formatDate(dateValue: string) {
@@ -164,16 +302,16 @@ export default function AdminSearchLogsPage() {
           </div>
 
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
-            Suchanfragen{" "}
+            Akquise{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              auswerten
+              Cockpit
             </span>
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Analysiere, wonach Nutzer suchen. Besonders wertvoll sind
-            Suchanfragen ohne Treffer, weil daraus neue Akquise-Chancen für
-            Locario entstehen.
+            Suchdaten zeigen dir, was Nutzer wirklich brauchen. Besonders
+            wertvoll sind Suchbegriffe ohne Treffer: Dort fehlen passende
+            Anbieter auf Locario.
           </p>
         </div>
 
@@ -187,314 +325,365 @@ export default function AdminSearchLogsPage() {
         </button>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard
-          title="Suchanfragen"
-          value={searchStats.totalSearches.toString()}
-          description="Gespeicherte Suchen"
+      <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <CompactMetric
+          label="Suchanfragen"
+          value={searchStats.totalSearches}
         />
-
-        <AdminStatCard
-          title="Eindeutig"
-          value={searchStats.uniqueSearches.toString()}
-          description="Verschiedene Suchbegriffe"
+        <CompactMetric
+          label="Eindeutig"
+          value={searchStats.uniqueSearches}
         />
-
-        <AdminStatCard
-          title="Ohne Treffer"
-          value={searchStats.zeroResultSearches.toString()}
-          description="Potenzielle Akquise-Chancen"
+        <CompactMetric
+          label="0-Treffer"
+          value={searchStats.zeroResultSearches}
+          variant="red"
         />
-
-        <AdminStatCard
-          title="Ø Treffer"
-          value={averageResults.toString()}
-          description="Durchschnitt pro Suche"
+        <CompactMetric
+          label="Mit Treffern"
+          value={successfulSearchLogs.length}
+          variant="emerald"
+        />
+        <CompactMetric
+          label="Ø Treffer"
+          value={averageResults}
+          variant="amber"
         />
       </div>
 
       {errorMessage && (
-        <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
+        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
           {errorMessage}
         </div>
       )}
 
-      <div className="mt-10 grid gap-8 xl:grid-cols-2">
-        <SearchStatsCard
-          title="Top Suchanfragen"
-          description="Diese Begriffe wurden am häufigsten gesucht."
-          items={searchStats.topSearches}
-          emptyMessage="Noch keine Top-Suchanfragen vorhanden."
-          formatDate={formatDate}
-        />
-
-        <SearchStatsCard
-          title="Akquise-Chancen"
-          description="Diese Suchen hatten keine oder wenige Treffer. Hier könnten passende Firmen fehlen."
-          items={searchStats.acquisitionOpportunities}
-          emptyMessage="Aktuell keine offenen Akquise-Chancen."
-          formatDate={formatDate}
-          highlight
-        />
-      </div>
-
-      <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <div>
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Suchlog
+              Auswertung
             </p>
 
-            <h2 className="mt-2 text-3xl font-black">
-              Letzte Suchanfragen
-            </h2>
+            <h2 className="mt-2 text-3xl font-black">Nachfrage erkennen</h2>
 
-            <p className="mt-3 text-slate-400">
-              Durchsuche alle gespeicherten Suchanfragen und filtere nach
-              Trefferanzahl.
+            <p className="mt-2 text-sm text-slate-400">
+              Starte mit Akquise-Chancen. Dort findest du Suchbegriffe, bei
+              denen Locario noch zu wenig oder keine passenden Resultate hat.
             </p>
           </div>
 
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/admin/firmen"
+              className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
             >
-              Filter zurücksetzen
-            </button>
-          )}
+              Firmenverwaltung
+            </Link>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              >
+                Zur Akquise-Ansicht
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_16rem]">
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {analysisViews.map((view) => {
+            const isActive = selectedView === view.value;
+
+            return (
+              <button
+                key={view.value}
+                type="button"
+                onClick={() => setSelectedView(view.value)}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  isActive
+                    ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100"
+                    : "border-white/10 bg-slate-950/45 text-slate-300 hover:border-cyan-300/30 hover:bg-white/[0.06]"
+                }`}
+              >
+                <span className="block font-black">{view.label}</span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {view.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
           <InputField
             label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Suchbegriff, normalisierte Suche..."
+            placeholder="Suchbegriff, normalisierte Suche, Trefferzahl..."
           />
 
-          <SelectField
-            label="Treffer"
-            value={selectedResultFilter}
-            onChange={setSelectedResultFilter}
-            options={[
-              { value: "", label: "Alle Suchanfragen" },
-              { value: "zero", label: "Nur 0 Treffer" },
-              { value: "with_results", label: "Nur mit Treffern" },
-            ]}
-          />
+          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+            Suchanalyse = nicht verwalten, sondern Nachfrage verstehen. Wenn
+            ein Begriff oft gesucht wird und wenig Treffer hat, ist das ein
+            Hinweis für Firmenakquise oder neue Kategorien.
+          </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          <MiniStat
-            title="Gefiltert"
-            value={filteredSearchLogs.length.toString()}
-            description={`von ${searchLogs.length} Suchanfragen`}
-          />
+        <div className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 md:flex-row md:items-center">
+          <p>
+            <span className="font-black text-white">{activeItems.length}</span>{" "}
+            Einträge in dieser Ansicht.
+          </p>
 
-          <MiniStat
-            title="Mit Treffern"
-            value={successfulSearchLogs.length.toString()}
-            description="Suchen mit passenden Ergebnissen"
-          />
-
-          <MiniStat
-            title="Ohne Treffer"
-            value={zeroResultLogs.length.toString()}
-            description="Suchen ohne passende Ergebnisse"
-          />
+          <p className="text-slate-500">
+            Seite {safeCurrentPage} von {pageCount} · {itemsPerPage} pro Seite
+          </p>
         </div>
-      </section>
 
-      {isLoading && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Suchanfragen werden geladen...
-        </div>
-      )}
+        {isLoading && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Suchdaten werden geladen...
+          </div>
+        )}
 
-      {!isLoading && searchLogs.length === 0 && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Noch keine Suchanfragen gespeichert.
-        </div>
-      )}
+        {!isLoading && searchLogs.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Noch keine Suchanfragen gespeichert.
+          </div>
+        )}
 
-      {!isLoading && searchLogs.length > 0 && filteredSearchLogs.length === 0 && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Keine Suchanfrage passt zu deinem Filter.
-        </div>
-      )}
+        {!isLoading && searchLogs.length > 0 && activeItems.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            In dieser Ansicht gibt es aktuell keinen passenden Eintrag.
+          </div>
+        )}
 
-      {!isLoading && filteredSearchLogs.length > 0 && (
-        <div className="mt-10 grid gap-4">
-          {filteredSearchLogs.map((searchLog) => (
-            <article
-              key={searchLog.id}
-              className={`rounded-[2rem] border p-6 shadow-2xl shadow-slate-950/20 ${
-                searchLog.resultCount === 0
-                  ? "border-red-300/20 bg-red-300/10"
-                  : "border-white/10 bg-white/[0.06]"
-              }`}
-            >
-              <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                <div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <h3 className="text-2xl font-black tracking-tight">
-                      {searchLog.query}
-                    </h3>
+        {!isLoading &&
+          (selectedView === "opportunities" || selectedView === "top") &&
+          paginatedStatItems.length > 0 && (
+            <div className="mt-5 grid gap-3">
+              {paginatedStatItems.map((item) => {
+                const isOpportunityView = selectedView === "opportunities";
 
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-black ${
-                        searchLog.resultCount === 0
-                          ? "border-red-300/30 bg-red-300/10 text-red-100"
-                          : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
-                      }`}
-                    >
-                      {searchLog.resultCount} Treffer
-                    </span>
-                  </div>
+                return (
+                  <article
+                    key={item.normalizedQuery}
+                    className={`rounded-3xl border p-4 transition ${
+                      isOpportunityView
+                        ? getOpportunityClassName(item)
+                        : "border-white/10 bg-slate-950/45"
+                    }`}
+                  >
+                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_auto] xl:items-center">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="break-words text-xl font-black text-white">
+                            {item.latestQuery}
+                          </h3>
 
-                  <p className="mt-2 text-sm text-slate-400">
-                    Normalisiert: {searchLog.normalizedQuery}
-                  </p>
+                          {isOpportunityView && (
+                            <span className="rounded-full border border-white/15 bg-slate-950/40 px-3 py-1 text-xs font-black text-white">
+                              {getOpportunityLabel(item)}
+                            </span>
+                          )}
 
-                  <p className="mt-2 text-sm text-slate-500">
-                    Gesucht am {formatDate(searchLog.createdAt)}
-                  </p>
-                </div>
+                          <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
+                            {item.searchCount}x gesucht
+                          </span>
+                        </div>
 
-                {searchLog.resultCount === 0 && (
-                  <div className="rounded-3xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100 md:max-w-xs">
-                    <p className="font-black">Akquise-Hinweis</p>
-                    <p className="mt-1 text-amber-100/80">
-                      Für diese Suche fehlen passende Anbieter. Das kann ein
-                      guter Hinweis für neue Firmenakquise sein.
-                    </p>
-                  </div>
-                )}
+                        <p className="mt-2 text-sm text-slate-300">
+                          Normalisiert: {item.normalizedQuery}
+                        </p>
+
+                        <p className="mt-2 text-xs text-slate-500">
+                          Zuletzt gesucht: {formatDate(item.latestAt)}
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-3 xl:grid-cols-1">
+                        <InfoLine
+                          label="Letzte Treffer"
+                          value={item.latestResultCount.toString()}
+                        />
+                        <InfoLine
+                          label="0-Treffer"
+                          value={item.zeroResultCount.toString()}
+                        />
+                        <InfoLine
+                          label="Ø Treffer"
+                          value={item.averageResultCount.toString()}
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 xl:justify-end">
+                        <Link
+                          href="/admin/firmen"
+                          className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                        >
+                          Firma suchen
+                        </Link>
+
+                        <Link
+                          href="/admin/firmenanfragen"
+                          className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                        >
+                          Inbox prüfen
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
+        {!isLoading &&
+          (selectedView === "zero_logs" || selectedView === "all_logs") &&
+          paginatedSearchLogs.length > 0 && (
+            <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+                  <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-black uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3">Suchbegriff</th>
+                      <th className="px-4 py-3">Normalisiert</th>
+                      <th className="px-4 py-3">Treffer</th>
+                      <th className="px-4 py-3">Zeitpunkt</th>
+                      <th className="px-4 py-3 text-right">Hinweis</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {paginatedSearchLogs.map((searchLog) => {
+                      const hasNoResults = searchLog.resultCount === 0;
+
+                      return (
+                        <tr
+                          key={searchLog.id}
+                          className={`border-b border-white/10 transition last:border-b-0 hover:bg-white/[0.04] ${
+                            hasNoResults ? "bg-red-300/10" : "bg-slate-950/35"
+                          }`}
+                        >
+                          <td className="max-w-[24rem] px-4 py-4">
+                            <p className="truncate font-black text-white">
+                              {searchLog.query}
+                            </p>
+                          </td>
+
+                          <td className="max-w-[20rem] px-4 py-4 text-slate-400">
+                            <p className="truncate">
+                              {searchLog.normalizedQuery}
+                            </p>
+                          </td>
+
+                          <td className="px-4 py-4">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-black ${
+                                hasNoResults
+                                  ? "border-red-300/30 bg-red-300/10 text-red-100"
+                                  : "border-emerald-300/30 bg-emerald-300/10 text-emerald-100"
+                              }`}
+                            >
+                              {searchLog.resultCount} Treffer
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-4 text-slate-400">
+                            {formatDate(searchLog.createdAt)}
+                          </td>
+
+                          <td className="px-4 py-4 text-right">
+                            {hasNoResults ? (
+                              <span className="text-xs font-black text-red-100">
+                                Akquise prüfen
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-500">
+                                Nachfrage vorhanden
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </article>
-          ))}
-        </div>
-      )}
+            </div>
+          )}
+
+        {!isLoading && activeItems.length > itemsPerPage && (
+          <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Zurück
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              Seite{" "}
+              <span className="font-black text-white">{safeCurrentPage}</span>{" "}
+              von <span className="font-black text-white">{pageCount}</span>
+            </p>
+
+            <button
+              type="button"
+              disabled={safeCurrentPage >= pageCount}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(pageCount, page + 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter
+            </button>
+          </div>
+        )}
+      </section>
     </section>
   );
 }
 
-function AdminStatCard({
-  title,
+function CompactMetric({
+  label,
   value,
-  description,
+  variant = "cyan",
 }: {
-  title: string;
-  value: string;
-  description: string;
+  label: string;
+  value: number;
+  variant?: "cyan" | "emerald" | "amber" | "red";
 }) {
+  const valueClassName =
+    variant === "emerald"
+      ? "text-emerald-200"
+      : variant === "amber"
+        ? "text-amber-200"
+        : variant === "red"
+          ? "text-red-200"
+          : "text-cyan-200";
+
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
-        {title}
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
       </p>
 
-      <p className="mt-4 text-5xl font-black text-cyan-200">{value}</p>
-
-      <p className="mt-3 text-sm text-slate-300">{description}</p>
-    </article>
+      <p className={`mt-1 text-3xl font-black ${valueClassName}`}>{value}</p>
+    </div>
   );
 }
 
-function MiniStat({
-  title,
-  value,
-  description,
-}: {
-  title: string;
-  value: string;
-  description: string;
-}) {
+function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <article className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
-        {title}
-      </p>
-
-      <p className="mt-3 text-3xl font-black text-white">{value}</p>
-
-      <p className="mt-2 text-sm text-slate-400">{description}</p>
-    </article>
-  );
-}
-
-function SearchStatsCard({
-  title,
-  description,
-  items,
-  emptyMessage,
-  formatDate,
-  highlight = false,
-}: {
-  title: string;
-  description: string;
-  items: SearchLogStat[];
-  emptyMessage: string;
-  formatDate: (dateValue: string) => string;
-  highlight?: boolean;
-}) {
-  return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-        Analyse
-      </p>
-
-      <h2 className="mt-2 text-3xl font-black">{title}</h2>
-
-      <p className="mt-3 text-slate-400">{description}</p>
-
-      {items.length === 0 && (
-        <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
-          {emptyMessage}
-        </div>
-      )}
-
-      {items.length > 0 && (
-        <div className="mt-6 grid gap-4">
-          {items.slice(0, 8).map((item) => (
-            <div
-              key={item.normalizedQuery}
-              className={`rounded-3xl border p-5 ${
-                highlight
-                  ? "border-amber-300/20 bg-amber-300/10"
-                  : "border-white/10 bg-slate-950/50"
-              }`}
-            >
-              <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
-                <div>
-                  <h3 className="text-xl font-black">{item.latestQuery}</h3>
-
-                  <p className="mt-1 text-xs text-slate-500">
-                    Normalisiert: {item.normalizedQuery}
-                  </p>
-                </div>
-
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
-                  {item.searchCount}x gesucht
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-3">
-                <p>Letzte Treffer: {item.latestResultCount}</p>
-                <p>0-Treffer: {item.zeroResultCount}</p>
-                <p>Ø Treffer: {item.averageResultCount}</p>
-              </div>
-
-              <p className="mt-3 text-xs text-slate-500">
-                Zuletzt gesucht: {formatDate(item.latestAt)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </article>
+    <p>
+      <span className="text-slate-500">{label}:</span>{" "}
+      <span className="font-black text-slate-100">{value}</span>
+    </p>
   );
 }
 
@@ -522,41 +711,3 @@ function InputField({
     </div>
   );
 }
-
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: {
-    value: string;
-    label: string;
-  }[];
-}) {
-  return (
-    <div>
-      <label className="text-sm font-bold text-slate-200">{label}</label>
-
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-300"
-      >
-        {options.map((option) => (
-          <option
-            key={option.value}
-            value={option.value}
-            className="bg-slate-950 text-white"
-          >
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-

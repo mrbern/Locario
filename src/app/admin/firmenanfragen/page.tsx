@@ -1,19 +1,33 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
+  canCompanyReceiveLeads,
   canCompanyUseAdvertising,
+  canCompanyUsePartnerDashboard,
   getCompanyPlanLabel,
 } from "@/data/plans";
 import type { Company } from "@/types/company";
 import type { CompanyInquiry } from "@/types/company-inquiry";
+
+type DrawerMode = "closed" | "details";
+
+type InboxView = "open" | "new" | "contacted" | "converted" | "rejected" | "all";
 
 type PublishCompanyInquiryResponse = {
   company: Company;
   inquiry: CompanyInquiry;
 };
 
-const inquiryStatusOptions = [
+type InquiryStatusOption = {
+  value: string;
+  label: string;
+};
+
+const inquiriesPerPage = 25;
+
+const inquiryStatusOptions: InquiryStatusOption[] = [
   {
     value: "new",
     label: "Neu",
@@ -24,11 +38,71 @@ const inquiryStatusOptions = [
   },
   {
     value: "converted",
-    label: "Umgewandelt",
+    label: "Angenommen",
   },
   {
     value: "rejected",
     label: "Abgelehnt",
+  },
+];
+
+const inboxViews: {
+  value: InboxView;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "open",
+    label: "Offen",
+    description: "Neu + kontaktiert",
+  },
+  {
+    value: "new",
+    label: "Neu",
+    description: "Noch nicht bearbeitet",
+  },
+  {
+    value: "contacted",
+    label: "Kontaktiert",
+    description: "In Abklärung",
+  },
+  {
+    value: "converted",
+    label: "Angenommen",
+    description: "Bereits in Verwaltung",
+  },
+  {
+    value: "rejected",
+    label: "Abgelehnt",
+    description: "Nicht übernehmen",
+  },
+  {
+    value: "all",
+    label: "Alle",
+    description: "Gesamtes Archiv",
+  },
+];
+
+const planFilterOptions = [
+  {
+    value: "",
+    label: "Alle Pakete",
+  },
+  {
+    value: "pilot",
+    label: "Pilot",
+  },
+  {
+    value: "starter",
+    label: "Starter",
+  },
+  {
+    value: "pro",
+    label: "Pro",
+  },
+  {
+    value: "premium",
+    label: "Premium",
   },
 ];
 
@@ -42,7 +116,7 @@ function getInquiryStatusLabel(status: string) {
   }
 
   if (status === "converted") {
-    return "Umgewandelt";
+    return "Angenommen";
   }
 
   if (status === "rejected") {
@@ -88,15 +162,39 @@ function getPlanClassName(plan: string | undefined) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
+function getStatusRank(status: string) {
+  if (status === "new") {
+    return 1;
+  }
+
+  if (status === "contacted") {
+    return 2;
+  }
+
+  if (status === "converted") {
+    return 3;
+  }
+
+  if (status === "rejected") {
+    return 4;
+  }
+
+  return 5;
+}
+
 function hasInquiryAd(inquiry: CompanyInquiry) {
   return Boolean(
-    inquiry.adTitle.trim() ||
-      inquiry.adDescription.trim() ||
-      inquiry.adCta.trim()
+    (inquiry.adTitle || "").trim() ||
+      (inquiry.adDescription || "").trim() ||
+      (inquiry.adCta || "").trim()
   );
 }
 
 function getPartnerPath(company: Company) {
+  if (!canCompanyUsePartnerDashboard(company.plan)) {
+    return "";
+  }
+
   if (!company.accessToken) {
     return "";
   }
@@ -104,13 +202,70 @@ function getPartnerPath(company: Company) {
   return `/partner/${company.accessToken}`;
 }
 
+function getPublishSuccessMessage(company: Company) {
+  const partnerPath = getPartnerPath(company);
+
+  if (partnerPath) {
+    return `Firma "${company.name}" wurde angenommen und in der Firmenverwaltung erstellt. Partner-Link: ${partnerPath}`;
+  }
+
+  return `Firma "${company.name}" wurde angenommen und in der Firmenverwaltung erstellt.`;
+}
+
+function getInquirySearchText(inquiry: CompanyInquiry) {
+  return [
+    inquiry.companyName,
+    inquiry.contactName,
+    inquiry.email,
+    inquiry.phone,
+    inquiry.website,
+    inquiry.city,
+    inquiry.desiredPlan,
+    inquiry.mainCategory,
+    inquiry.subCategory,
+    inquiry.description,
+    inquiry.message,
+    inquiry.adTitle,
+    inquiry.adDescription,
+    inquiry.adCta,
+    ...inquiry.subCategories,
+    ...inquiry.tags,
+    ...inquiry.searchTerms,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesInboxView(inquiry: CompanyInquiry, view: InboxView) {
+  if (view === "open") {
+    return inquiry.status === "new" || inquiry.status === "contacted";
+  }
+
+  if (view === "all") {
+    return true;
+  }
+
+  return inquiry.status === view;
+}
+
 export default function AdminCompanyInquiriesPage() {
   const [companyInquiries, setCompanyInquiries] = useState<CompanyInquiry[]>(
     []
   );
+
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(
+    null
+  );
+
+  const [selectedInboxView, setSelectedInboxView] =
+    useState<InboxView>("open");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatus, setSelectedStatus] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [latestPublishedCompany, setLatestPublishedCompany] =
+    useState<Company | null>(null);
 
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -125,6 +280,21 @@ export default function AdminCompanyInquiriesPage() {
   useEffect(() => {
     loadCompanyInquiries();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedPlan, selectedInboxView]);
+
+  const selectedInquiry = useMemo(() => {
+    if (!selectedInquiryId) {
+      return null;
+    }
+
+    return (
+      companyInquiries.find((inquiry) => inquiry.id === selectedInquiryId) ??
+      null
+    );
+  }, [companyInquiries, selectedInquiryId]);
 
   const newCompanyInquiries = useMemo(() => {
     return companyInquiries.filter((inquiry) => inquiry.status === "new");
@@ -142,46 +312,60 @@ export default function AdminCompanyInquiriesPage() {
     return companyInquiries.filter((inquiry) => inquiry.status === "rejected");
   }, [companyInquiries]);
 
+  const openCompanyInquiries = useMemo(() => {
+    return companyInquiries.filter(
+      (inquiry) => inquiry.status === "new" || inquiry.status === "contacted"
+    );
+  }, [companyInquiries]);
+
   const filteredInquiries = useMemo(() => {
     const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
-    return companyInquiries.filter((inquiry) => {
-      const searchableText = [
-        inquiry.companyName,
-        inquiry.contactName,
-        inquiry.email,
-        inquiry.phone,
-        inquiry.website,
-        inquiry.city,
-        inquiry.desiredPlan,
-        inquiry.mainCategory,
-        inquiry.subCategory,
-        inquiry.description,
-        inquiry.message,
-        inquiry.adTitle,
-        inquiry.adDescription,
-        inquiry.adCta,
-        ...inquiry.subCategories,
-        ...inquiry.tags,
-        ...inquiry.searchTerms,
-      ]
-        .join(" ")
-        .toLowerCase();
+    return companyInquiries
+      .filter((inquiry) => {
+        const matchesSearch =
+          !normalizedSearchQuery ||
+          getInquirySearchText(inquiry).includes(normalizedSearchQuery);
 
-      const matchesSearch =
-        !normalizedSearchQuery ||
-        searchableText.includes(normalizedSearchQuery);
+        const matchesPlan =
+          !selectedPlan || inquiry.desiredPlan === selectedPlan;
 
-      const matchesStatus =
-        !selectedStatus || inquiry.status === selectedStatus;
+        return (
+          matchesSearch &&
+          matchesPlan &&
+          matchesInboxView(inquiry, selectedInboxView)
+        );
+      })
+      .sort((firstInquiry, secondInquiry) => {
+        const statusDifference =
+          getStatusRank(firstInquiry.status) -
+          getStatusRank(secondInquiry.status);
 
-      const matchesPlan = !selectedPlan || inquiry.desiredPlan === selectedPlan;
+        if (statusDifference !== 0) {
+          return statusDifference;
+        }
 
-      return matchesSearch && matchesStatus && matchesPlan;
-    });
-  }, [companyInquiries, searchQuery, selectedStatus, selectedPlan]);
+        return (
+          new Date(secondInquiry.createdAt).getTime() -
+          new Date(firstInquiry.createdAt).getTime()
+        );
+      });
+  }, [companyInquiries, searchQuery, selectedPlan, selectedInboxView]);
 
-  const hasActiveFilters = searchQuery || selectedStatus || selectedPlan;
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredInquiries.length / inquiriesPerPage)
+  );
+
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+
+  const paginatedInquiries = filteredInquiries.slice(
+    (safeCurrentPage - 1) * inquiriesPerPage,
+    safeCurrentPage * inquiriesPerPage
+  );
+
+  const hasActiveFilters =
+    searchQuery || selectedPlan || selectedInboxView !== "open";
 
   async function loadCompanyInquiries() {
     try {
@@ -212,6 +396,7 @@ export default function AdminCompanyInquiriesPage() {
       setUpdatingInquiryId(inquiryId);
       setSuccessMessage("");
       setErrorMessage("");
+      setLatestPublishedCompany(null);
 
       const response = await fetch(`/api/company-inquiries/${inquiryId}`, {
         method: "PUT",
@@ -240,7 +425,11 @@ export default function AdminCompanyInquiriesPage() {
         )
       );
 
-      setSuccessMessage("Status der Firmenanfrage wurde aktualisiert.");
+      setSuccessMessage("Status der Anfrage wurde aktualisiert.");
+
+      if (status === "rejected" || status === "converted") {
+        closeDrawer();
+      }
 
       setTimeout(() => {
         setSuccessMessage("");
@@ -260,7 +449,7 @@ export default function AdminCompanyInquiriesPage() {
 
   async function publishCompanyInquiry(inquiryId: string) {
     const confirmed = window.confirm(
-      "Möchtest du diese Firmenanfrage wirklich als Firma veröffentlichen?"
+      "Möchtest du diese Firmenanfrage annehmen und daraus eine Firma in der Verwaltung erstellen?"
     );
 
     if (!confirmed) {
@@ -271,6 +460,7 @@ export default function AdminCompanyInquiriesPage() {
       setPublishingInquiryId(inquiryId);
       setSuccessMessage("");
       setErrorMessage("");
+      setLatestPublishedCompany(null);
 
       const response = await fetch(
         `/api/company-inquiries/${inquiryId}/publish`,
@@ -284,7 +474,7 @@ export default function AdminCompanyInquiriesPage() {
 
         throw new Error(
           errorData?.message ||
-            "Firmenanfrage konnte nicht veröffentlicht werden."
+            "Firmenanfrage konnte nicht angenommen werden."
         );
       }
 
@@ -296,21 +486,19 @@ export default function AdminCompanyInquiriesPage() {
         )
       );
 
-      setSuccessMessage(
-        `Firma "${data.company.name}" wurde veröffentlicht. Partner-Link: ${getPartnerPath(
-          data.company
-        )}`
-      );
+      setLatestPublishedCompany(data.company);
+      setSuccessMessage(getPublishSuccessMessage(data.company));
+      closeDrawer();
 
       setTimeout(() => {
         setSuccessMessage("");
-      }, 6000);
+      }, 7000);
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
       } else {
         setErrorMessage(
-          "Beim Veröffentlichen der Firmenanfrage ist ein unbekannter Fehler passiert."
+          "Beim Annehmen der Firmenanfrage ist ein unbekannter Fehler passiert."
         );
       }
     } finally {
@@ -318,10 +506,23 @@ export default function AdminCompanyInquiriesPage() {
     }
   }
 
+  function openDetailsDrawer(inquiry: CompanyInquiry) {
+    setSelectedInquiryId(inquiry.id);
+    setDrawerMode("details");
+    setSuccessMessage("");
+    setErrorMessage("");
+    setLatestPublishedCompany(null);
+  }
+
+  function closeDrawer() {
+    setDrawerMode("closed");
+  }
+
   function resetFilters() {
     setSearchQuery("");
-    setSelectedStatus("");
     setSelectedPlan("");
+    setSelectedInboxView("open");
+    setCurrentPage(1);
   }
 
   function formatDate(dateValue: string) {
@@ -340,84 +541,111 @@ export default function AdminCompanyInquiriesPage() {
         <div>
           <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100">
             <span className="h-2 w-2 rounded-full bg-cyan-300" />
-            Firmenanfragen
+            Firmen-Inbox
           </div>
 
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
             Anfragen{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              prüfen
+              entscheiden
             </span>
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Prüfe neue Firmenprofile, kontaktiere Interessenten, ändere den
-            Status und veröffentliche passende Anfragen direkt als Firma.
+            Hier werden nur Firmenanfragen geprüft. Nach dem Annehmen wird die
+            Firma erstellt und danach unter Firmen verwaltet.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadCompanyInquiries}
-          disabled={isLoading}
-          className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoading ? "Lädt..." : "Aktualisieren"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/admin/firmen"
+            className="rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 text-center text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
+          >
+            Firmenverwaltung
+          </Link>
+
+          <button
+            type="button"
+            onClick={loadCompanyInquiries}
+            disabled={isLoading}
+            className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? "Lädt..." : "Aktualisieren"}
+          </button>
+        </div>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard
-          title="Neu"
-          value={newCompanyInquiries.length.toString()}
-          description="Noch nicht kontaktiert"
+      <div className="mt-8 grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <CompactMetric
+          label="Offen"
+          value={openCompanyInquiries.length}
+          variant="cyan"
         />
-
-        <AdminStatCard
-          title="Kontaktiert"
-          value={contactedCompanyInquiries.length.toString()}
-          description="In Abklärung"
+        <CompactMetric
+          label="Neu"
+          value={newCompanyInquiries.length}
+          variant="emerald"
         />
-
-        <AdminStatCard
-          title="Umgewandelt"
-          value={convertedCompanyInquiries.length.toString()}
-          description="Bereits veröffentlicht"
+        <CompactMetric
+          label="Kontaktiert"
+          value={contactedCompanyInquiries.length}
+          variant="amber"
         />
-
-        <AdminStatCard
-          title="Abgelehnt"
-          value={rejectedCompanyInquiries.length.toString()}
-          description="Nicht übernommen"
+        <CompactMetric
+          label="Angenommen"
+          value={convertedCompanyInquiries.length}
+          variant="cyan"
+        />
+        <CompactMetric
+          label="Abgelehnt"
+          value={rejectedCompanyInquiries.length}
+          variant="red"
         />
       </div>
 
       {successMessage && (
-        <div className="mt-8 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
-          {successMessage}
+        <div className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
+          <p>{successMessage}</p>
+
+          {latestPublishedCompany && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/admin/firmen"
+                className="rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200"
+              >
+                Zur Firmenverwaltung
+              </Link>
+
+              <Link
+                href={`/firmen/${latestPublishedCompany.id}`}
+                className="rounded-2xl border border-emerald-300/30 px-4 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/10"
+              >
+                Öffentlich ansehen
+              </Link>
+            </div>
+          )}
         </div>
       )}
 
       {errorMessage && (
-        <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
+        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
           {errorMessage}
         </div>
       )}
 
-      <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
+      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <div>
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Filter
+              Arbeitsliste
             </p>
 
-            <h2 className="mt-2 text-3xl font-black">
-              Firmenanfragen durchsuchen
-            </h2>
+            <h2 className="mt-2 text-3xl font-black">Offene Entscheidungen</h2>
 
-            <p className="mt-3 text-slate-400">
-              Suche nach Firma, Kontaktperson, Ort, Kategorie, Paket oder
-              Suchbegriffen.
+            <p className="mt-2 text-sm text-slate-400">
+              Standardmässig siehst du nur offene Anfragen. Angenommene Firmen
+              verschwinden aus dieser Arbeitsliste.
             </p>
           </div>
 
@@ -425,113 +653,380 @@ export default function AdminCompanyInquiriesPage() {
             <button
               type="button"
               onClick={resetFilters}
-              className="rounded-2xl border border-white/15 px-5 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
             >
-              Filter zurücksetzen
+              Zur offenen Inbox
             </button>
           )}
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_14rem_14rem]">
+        <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {inboxViews.map((view) => {
+            const isActive = selectedInboxView === view.value;
+
+            return (
+              <button
+                key={view.value}
+                type="button"
+                onClick={() => setSelectedInboxView(view.value)}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  isActive
+                    ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100"
+                    : "border-white/10 bg-slate-950/45 text-slate-300 hover:border-cyan-300/30 hover:bg-white/[0.06]"
+                }`}
+              >
+                <span className="block font-black">{view.label}</span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {view.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
           <InputField
             label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Firma, Ort, Kategorie, E-Mail..."
+            placeholder="Firma, Kontakt, Ort, Kategorie, E-Mail..."
           />
 
-          <SelectField
-            label="Status"
-            value={selectedStatus}
-            onChange={setSelectedStatus}
-            options={[
-              { value: "", label: "Alle Status" },
-              { value: "new", label: "Neu" },
-              { value: "contacted", label: "Kontaktiert" },
-              { value: "converted", label: "Umgewandelt" },
-              { value: "rejected", label: "Abgelehnt" },
-            ]}
-          />
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_1fr]">
+            <SelectField
+              label="Paket"
+              value={selectedPlan}
+              onChange={setSelectedPlan}
+              options={planFilterOptions}
+            />
 
-          <SelectField
-            label="Paket"
-            value={selectedPlan}
-            onChange={setSelectedPlan}
-            options={[
-              { value: "", label: "Alle Pakete" },
-              { value: "starter", label: "Starter" },
-              { value: "pro", label: "Pro" },
-              { value: "premium", label: "Premium" },
-            ]}
-          />
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+              Anfrage = nur prüfen, kontaktieren, annehmen oder ablehnen. Nach
+              dem Annehmen erfolgt die weitere Bearbeitung in der
+              Firmenverwaltung.
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
-          <span className="font-black text-white">
-            {filteredInquiries.length}
-          </span>{" "}
-          von{" "}
-          <span className="font-black text-white">
-            {companyInquiries.length}
-          </span>{" "}
-          Firmenanfragen werden angezeigt.
+        <div className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 md:flex-row md:items-center">
+          <p>
+            <span className="font-black text-white">
+              {filteredInquiries.length}
+            </span>{" "}
+            Anfragen in dieser Ansicht.
+          </p>
+
+          <p className="text-slate-500">
+            Seite {safeCurrentPage} von {pageCount} · {inquiriesPerPage} pro
+            Seite
+          </p>
         </div>
-      </section>
 
-      {isLoading && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Firmenanfragen werden geladen...
-        </div>
-      )}
+        {isLoading && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Firmenanfragen werden geladen...
+          </div>
+        )}
 
-      {!isLoading && companyInquiries.length === 0 && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Noch keine Firmenanfragen gespeichert.
-        </div>
-      )}
+        {!isLoading && companyInquiries.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Noch keine Firmenanfragen gespeichert.
+          </div>
+        )}
 
-      {!isLoading && companyInquiries.length > 0 && filteredInquiries.length === 0 && (
-        <div className="mt-10 rounded-3xl border border-white/10 bg-white/[0.06] p-8 text-slate-300">
-          Keine Firmenanfrage passt zu deinem Filter.
-        </div>
-      )}
+        {!isLoading &&
+          companyInquiries.length > 0 &&
+          filteredInquiries.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+              In dieser Ansicht gibt es aktuell keine Anfrage.
+            </div>
+          )}
 
-      {!isLoading && filteredInquiries.length > 0 && (
-        <div className="mt-10 grid gap-6 xl:grid-cols-2">
-          {filteredInquiries.map((inquiry) => {
-            const isUpdating = updatingInquiryId === inquiry.id;
-            const isPublishing = publishingInquiryId === inquiry.id;
-            const advertisingAllowed = canCompanyUseAdvertising(
-              inquiry.desiredPlan
-            );
-            const inquiryHasAd = hasInquiryAd(inquiry);
+        {!isLoading && paginatedInquiries.length > 0 && (
+          <div className="mt-5 grid gap-3">
+            {paginatedInquiries.map((inquiry) => {
+              const isUpdating = updatingInquiryId === inquiry.id;
+              const isPublishing = publishingInquiryId === inquiry.id;
+              const advertisingAllowed = canCompanyUseAdvertising(
+                inquiry.desiredPlan
+              );
+              const leadsAllowed = canCompanyReceiveLeads(inquiry.desiredPlan);
+              const partnerDashboardAllowed = canCompanyUsePartnerDashboard(
+                inquiry.desiredPlan
+              );
+              const inquiryHasAd = hasInquiryAd(inquiry);
+              const isClosed =
+                inquiry.status === "converted" || inquiry.status === "rejected";
 
-            return (
-              <article
-                key={inquiry.id}
-                className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20"
-              >
-                <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <h3 className="text-2xl font-black tracking-tight">
-                        {inquiry.companyName}
-                      </h3>
+              return (
+                <article
+                  key={inquiry.id}
+                  className={`rounded-3xl border p-4 transition ${
+                    inquiry.status === "new"
+                      ? "border-emerald-300/20 bg-emerald-300/10"
+                      : inquiry.status === "contacted"
+                        ? "border-amber-300/20 bg-amber-300/10"
+                        : inquiry.status === "converted"
+                          ? "border-cyan-300/20 bg-cyan-300/10"
+                          : inquiry.status === "rejected"
+                            ? "border-red-300/20 bg-red-300/10"
+                            : "border-white/10 bg-slate-950/45"
+                  }`}
+                >
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_auto] xl:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openDetailsDrawer(inquiry)}
+                          className="break-words text-left text-xl font-black text-white transition hover:text-cyan-100"
+                        >
+                          {inquiry.companyName}
+                        </button>
 
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
-                          inquiry.desiredPlan
-                        )}`}
-                      >
-                        {getCompanyPlanLabel(inquiry.desiredPlan)}
-                      </span>
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-black ${getInquiryStatusClassName(
+                            inquiry.status
+                          )}`}
+                        >
+                          {getInquiryStatusLabel(inquiry.status)}
+                        </span>
+
+                        <span
+                          className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
+                            inquiry.desiredPlan
+                          )}`}
+                        >
+                          {getCompanyPlanLabel(inquiry.desiredPlan)}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-sm text-slate-300">
+                        {inquiry.city} ·{" "}
+                        {inquiry.mainCategory || "Keine Kategorie"} ·{" "}
+                        {inquiry.subCategory || "Keine Unterkategorie"}
+                      </p>
+
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {leadsAllowed && <TinyDot label="Leads" />}
+                        {partnerDashboardAllowed && (
+                          <TinyDot label="Dashboard" />
+                        )}
+                        {advertisingAllowed && inquiryHasAd && (
+                          <TinyDot label="Werbung" />
+                        )}
+                        {!partnerDashboardAllowed && (
+                          <TinyDot label="Starter" />
+                        )}
+                      </div>
                     </div>
 
-                    <p className="mt-2 text-sm text-slate-400">
-                      Anfrage vom {formatDate(inquiry.createdAt)}
-                    </p>
-                  </div>
+                    <div className="min-w-0 text-sm text-slate-300">
+                      <p className="truncate font-bold text-white">
+                        {inquiry.contactName}
+                      </p>
 
+                      <p className="mt-1 truncate text-slate-400">
+                        {inquiry.email}
+                      </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        Eingang: {formatDate(inquiry.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => openDetailsDrawer(inquiry)}
+                        className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                      >
+                        Details
+                      </button>
+
+                      <a
+                        href={`mailto:${inquiry.email}`}
+                        className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                      >
+                        Kontakt
+                      </a>
+
+                      {inquiry.status === "new" && (
+                        <button
+                          type="button"
+                          disabled={isUpdating || isPublishing}
+                          onClick={() =>
+                            updateCompanyInquiryStatus(
+                              inquiry.id,
+                              "contacted"
+                            )
+                          }
+                          className="rounded-xl border border-amber-300/30 px-3 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Kontaktiert
+                        </button>
+                      )}
+
+                      {!isClosed && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isPublishing}
+                            onClick={() => publishCompanyInquiry(inquiry.id)}
+                            className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isPublishing ? "Erstellt..." : "Annehmen"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isUpdating || isPublishing}
+                            onClick={() =>
+                              updateCompanyInquiryStatus(
+                                inquiry.id,
+                                "rejected"
+                              )
+                            }
+                            className="rounded-xl border border-red-400/30 px-3 py-2 text-xs font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Ablehnen
+                          </button>
+                        </>
+                      )}
+
+                      {inquiry.status === "converted" && (
+                        <Link
+                          href="/admin/firmen"
+                          className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                        >
+                          In Verwaltung
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+
+        {!isLoading && filteredInquiries.length > inquiriesPerPage && (
+          <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Zurück
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              Seite{" "}
+              <span className="font-black text-white">{safeCurrentPage}</span>{" "}
+              von <span className="font-black text-white">{pageCount}</span>
+            </p>
+
+            <button
+              type="button"
+              disabled={safeCurrentPage >= pageCount}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(pageCount, page + 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter
+            </button>
+          </div>
+        )}
+      </section>
+
+      <CompanyInquiryDrawer
+        mode={drawerMode}
+        inquiry={selectedInquiry}
+        updatingInquiryId={updatingInquiryId}
+        publishingInquiryId={publishingInquiryId}
+        onClose={closeDrawer}
+        onUpdateStatus={updateCompanyInquiryStatus}
+        onPublish={publishCompanyInquiry}
+        formatDate={formatDate}
+      />
+    </section>
+  );
+}
+
+function CompanyInquiryDrawer({
+  mode,
+  inquiry,
+  updatingInquiryId,
+  publishingInquiryId,
+  onClose,
+  onUpdateStatus,
+  onPublish,
+  formatDate,
+}: {
+  mode: DrawerMode;
+  inquiry: CompanyInquiry | null;
+  updatingInquiryId: string | null;
+  publishingInquiryId: string | null;
+  onClose: () => void;
+  onUpdateStatus: (inquiryId: string, status: string) => void;
+  onPublish: (inquiryId: string) => void;
+  formatDate: (dateValue: string) => string;
+}) {
+  if (mode === "closed" || !inquiry) {
+    return null;
+  }
+
+  const advertisingAllowed = canCompanyUseAdvertising(inquiry.desiredPlan);
+  const leadsAllowed = canCompanyReceiveLeads(inquiry.desiredPlan);
+  const partnerDashboardAllowed = canCompanyUsePartnerDashboard(
+    inquiry.desiredPlan
+  );
+  const inquiryHasAd = hasInquiryAd(inquiry);
+  const isUpdating = updatingInquiryId === inquiry.id;
+  const isPublishing = publishingInquiryId === inquiry.id;
+  const isClosed =
+    inquiry.status === "converted" || inquiry.status === "rejected";
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm">
+      <div className="flex min-h-screen justify-end">
+        <aside className="h-screen w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl shadow-slate-950/50 md:p-8">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-6 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+                Anfrage prüfen
+              </p>
+
+              <h2 className="mt-2 break-words text-4xl font-black tracking-tight">
+                {inquiry.companyName}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-slate-400">
+                Eingegangen am {formatDate(inquiry.createdAt)} von{" "}
+                {inquiry.contactName}. Diese Ansicht ist nur für die
+                Entscheidung gedacht.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Schliessen
+            </button>
+          </div>
+
+          <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Entscheidung
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
                   <span
                     className={`rounded-full border px-3 py-1 text-xs font-black ${getInquiryStatusClassName(
                       inquiry.status
@@ -539,124 +1034,87 @@ export default function AdminCompanyInquiriesPage() {
                   >
                     {getInquiryStatusLabel(inquiry.status)}
                   </span>
+
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
+                      inquiry.desiredPlan
+                    )}`}
+                  >
+                    {getCompanyPlanLabel(inquiry.desiredPlan)}
+                  </span>
                 </div>
 
-                <div className="mt-6 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                  <InfoLine label="Kontakt" value={inquiry.contactName} />
-                  <InfoLine label="Stadt" value={inquiry.city} />
-                  <InfoLine label="E-Mail" value={inquiry.email} />
-                  <InfoLine
-                    label="Telefon"
-                    value={inquiry.phone || "Nicht angegeben"}
-                  />
-                  <InfoLine
-                    label="Website"
-                    value={inquiry.website || "Nicht angegeben"}
-                    wide
-                  />
-                </div>
-
-                <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                  <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
-                    Eingereichtes Firmenprofil
-                  </p>
-
-                  <div className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                    <InfoLine
-                      label="Hauptkategorie"
-                      value={inquiry.mainCategory || "Nicht angegeben"}
-                    />
-                    <InfoLine
-                      label="Haupt-Unterkategorie"
-                      value={inquiry.subCategory || "Nicht angegeben"}
-                    />
-                  </div>
-
-                  {inquiry.subCategories.length > 0 && (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {inquiry.subCategories.map((subCategory) => (
-                        <span
-                          key={subCategory}
-                          className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"
-                        >
-                          {subCategory}
-                        </span>
-                      ))}
+                <div className="mt-5 grid gap-3">
+                  {inquiry.status === "converted" && (
+                    <div className="rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">
+                      Diese Anfrage wurde angenommen. Änderungen erfolgen jetzt
+                      in der Firmenverwaltung.
                     </div>
                   )}
 
-                  <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                      Beschreibung
-                    </p>
-
-                    <p className="mt-2 text-slate-200">
-                      {inquiry.description || "Nicht angegeben"}
-                    </p>
-                  </div>
-
-                  <div className="mt-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                      Suchbegriffe
-                    </p>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {inquiry.tags.length > 0 ? (
-                        inquiry.tags.map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-sm text-slate-400">
-                          Keine Suchbegriffe angegeben.
-                        </span>
-                      )}
+                  {inquiry.status === "rejected" && (
+                    <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-black text-red-200">
+                      Diese Anfrage wurde abgelehnt.
                     </div>
-                  </div>
+                  )}
+
+                  {!isClosed && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isPublishing}
+                        onClick={() => onPublish(inquiry.id)}
+                        className="rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isPublishing
+                          ? "Firma wird erstellt..."
+                          : "Annehmen & Firma erstellen"}
+                      </button>
+
+                      {inquiry.status === "new" && (
+                        <button
+                          type="button"
+                          disabled={isUpdating || isPublishing}
+                          onClick={() =>
+                            onUpdateStatus(inquiry.id, "contacted")
+                          }
+                          className="rounded-2xl border border-amber-300/30 px-4 py-3 text-sm font-black text-amber-100 transition hover:bg-amber-300/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Als kontaktiert markieren
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={isUpdating || isPublishing}
+                        onClick={() => onUpdateStatus(inquiry.id, "rejected")}
+                        className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Anfrage ablehnen
+                      </button>
+                    </>
+                  )}
+
+                  {inquiry.status === "converted" && (
+                    <Link
+                      href="/admin/firmen"
+                      className="rounded-2xl bg-cyan-300 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+                    >
+                      Zur Firmenverwaltung
+                    </Link>
+                  )}
                 </div>
+              </div>
 
-                {advertisingAllowed && inquiryHasAd && (
-                  <div className="mt-6 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-amber-200">
-                      Eingereichte Werbeanzeige
-                    </p>
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Kontakt
+                </p>
 
-                    <h4 className="mt-3 text-xl font-black text-white">
-                      {inquiry.adTitle || "Aktuelles Angebot"}
-                    </h4>
-
-                    <p className="mt-2 text-sm text-slate-300">
-                      {inquiry.adDescription || "Kein Werbetext angegeben."}
-                    </p>
-
-                    <p className="mt-4 text-sm font-black text-amber-100">
-                      Button: {inquiry.adCta || "Mehr erfahren"}
-                    </p>
-                  </div>
-                )}
-
-                {!advertisingAllowed && (
-                  <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
-                    Dieses Paket enthält keine aktive Werbeanzeige.
-                  </div>
-                )}
-
-                <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                    Nachricht an Locario
-                  </p>
-
-                  <p className="mt-2 text-slate-200">{inquiry.message}</p>
-                </div>
-
-                <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                <div className="mt-4 grid gap-3">
                   <a
                     href={`mailto:${inquiry.email}`}
-                    className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-200"
+                    className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
                   >
                     E-Mail senden
                   </a>
@@ -664,7 +1122,7 @@ export default function AdminCompanyInquiriesPage() {
                   {inquiry.phone && (
                     <a
                       href={`tel:${inquiry.phone}`}
-                      className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+                      className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-center text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
                     >
                       Anrufen
                     </a>
@@ -681,115 +1139,201 @@ export default function AdminCompanyInquiriesPage() {
                     </a>
                   )}
                 </div>
+              </div>
 
-                <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                    Veröffentlichung
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Beim Annehmen
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {leadsAllowed && <MiniBadge label="Leads" />}
+                  {partnerDashboardAllowed && <MiniBadge label="Dashboard" />}
+                  {advertisingAllowed && <MiniBadge label="Werbung" />}
+                  {!partnerDashboardAllowed && <MiniBadge label="Starter" />}
+                </div>
+
+                <p className="mt-4 text-sm leading-6 text-slate-300">
+                  Nach dem Annehmen wird daraus ein Firmeneintrag. Ab dann wird
+                  die Firma nur noch unter /admin/firmen bearbeitet.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <DetailBox title="Kontaktperson" value={inquiry.contactName} />
+                <DetailBox title="Stadt" value={inquiry.city} />
+                <DetailBox title="E-Mail" value={inquiry.email} />
+                <DetailBox
+                  title="Telefon"
+                  value={inquiry.phone || "Nicht angegeben"}
+                />
+                <DetailBox
+                  title="Website"
+                  value={inquiry.website || "Nicht angegeben"}
+                />
+                <DetailBox
+                  title="Gewünschtes Paket"
+                  value={getCompanyPlanLabel(inquiry.desiredPlan)}
+                />
+              </div>
+
+              <section className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+                  Eingereichte Angaben
+                </p>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <DetailBox
+                    title="Hauptkategorie"
+                    value={inquiry.mainCategory || "Nicht angegeben"}
+                  />
+
+                  <DetailBox
+                    title="Unterkategorie"
+                    value={inquiry.subCategory || "Nicht angegeben"}
+                  />
+                </div>
+
+                {inquiry.subCategories.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {inquiry.subCategories.map((subCategory) => (
+                      <span
+                        key={subCategory}
+                        className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"
+                      >
+                        {subCategory}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Beschreibung
                   </p>
 
-                  {inquiry.status === "converted" ? (
-                    <div className="mt-4 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-black text-cyan-100">
-                      Diese Anfrage wurde bereits als Firma veröffentlicht.
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={isPublishing}
-                      onClick={() => publishCompanyInquiry(inquiry.id)}
-                      className="mt-4 w-full rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isPublishing
-                        ? "Wird veröffentlicht..."
-                        : "Als Firma veröffentlichen"}
-                    </button>
-                  )}
-
-                  <p className="mt-4 text-xs text-slate-500">
-                    Beim Veröffentlichen wird automatisch eine echte Firma
-                    erstellt, inklusive Paket, Kategorien, Suchbegriffen,
-                    Kontaktdaten, Partner-Link und optionaler Werbung.
+                  <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-200">
+                    {inquiry.description || "Nicht angegeben"}
                   </p>
                 </div>
 
-                <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5">
-                  <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                    Status bearbeiten
+                <div className="mt-5">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Suchbegriffe
                   </p>
 
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    {inquiryStatusOptions.map((statusOption) => {
-                      const isActive = inquiry.status === statusOption.value;
-
-                      return (
-                        <button
-                          key={statusOption.value}
-                          type="button"
-                          disabled={isActive || isUpdating || isPublishing}
-                          onClick={() =>
-                            updateCompanyInquiryStatus(
-                              inquiry.id,
-                              statusOption.value
-                            )
-                          }
-                          className={`rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                            isActive
-                              ? "bg-cyan-300 text-slate-950"
-                              : "border border-white/15 text-white hover:border-cyan-300/30 hover:bg-white/10"
-                          }`}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {inquiry.tags.length > 0 ? (
+                      inquiry.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
                         >
-                          {isUpdating && !isActive
-                            ? "Speichert..."
-                            : statusOption.label}
-                        </button>
-                      );
-                    })}
+                          {tag}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-400">
+                        Keine Suchbegriffe angegeben.
+                      </span>
+                    )}
                   </div>
                 </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </section>
+              </section>
+
+              {advertisingAllowed && inquiryHasAd && (
+                <section className="rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5">
+                  <p className="text-xs font-black uppercase tracking-wide text-amber-200">
+                    Eingereichte Werbeidee
+                  </p>
+
+                  <h3 className="mt-3 text-2xl font-black text-white">
+                    {inquiry.adTitle || "Aktuelles Angebot"}
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {inquiry.adDescription || "Kein Werbetext angegeben."}
+                  </p>
+
+                  <p className="mt-4 text-sm font-black text-amber-100">
+                    Button: {inquiry.adCta || "Mehr erfahren"}
+                  </p>
+                </section>
+              )}
+
+              <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Nachricht an Locario
+                </p>
+
+                <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-200">
+                  {inquiry.message}
+                </p>
+              </section>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
   );
 }
 
-function AdminStatCard({
-  title,
+function CompactMetric({
+  label,
   value,
-  description,
+  variant = "cyan",
 }: {
-  title: string;
-  value: string;
-  description: string;
+  label: string;
+  value: number;
+  variant?: "cyan" | "emerald" | "amber" | "red";
 }) {
+  const valueClassName =
+    variant === "emerald"
+      ? "text-emerald-200"
+      : variant === "amber"
+        ? "text-amber-200"
+        : variant === "red"
+          ? "text-red-200"
+          : "text-cyan-200";
+
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+
+      <p className={`mt-1 text-3xl font-black ${valueClassName}`}>{value}</p>
+    </div>
+  );
+}
+
+function TinyDot({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[0.65rem] font-black text-cyan-100">
+      {label}
+    </span>
+  );
+}
+
+function MiniBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
+      {label}
+    </span>
+  );
+}
+
+function DetailBox({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {title}
       </p>
 
-      <p className="mt-4 text-5xl font-black text-cyan-200">{value}</p>
-
-      <p className="mt-3 text-sm text-slate-300">{description}</p>
-    </article>
-  );
-}
-
-function InfoLine({
-  label,
-  value,
-  wide = false,
-}: {
-  label: string;
-  value: string;
-  wide?: boolean;
-}) {
-  return (
-    <p className={wide ? "md:col-span-2" : ""}>
-      <span className="text-slate-500">{label}:</span>{" "}
-      <span className="text-slate-200">{value}</span>
-    </p>
+      <p className="mt-2 break-words text-sm text-slate-300">{value}</p>
+    </div>
   );
 }
 
@@ -854,4 +1398,3 @@ function SelectField({
     </div>
   );
 }
-

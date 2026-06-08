@@ -1,15 +1,34 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  getEventPlanLabel,
-  getEventPlanPrice,
-} from "@/data/event-plans";
+import { useEffect, useMemo, useState } from "react";
+import { getEventPlanLabel, getEventPlanPrice } from "@/data/event-plans";
 import type { EventInquiry } from "@/types/event-inquiry";
 import type { LocarioEvent } from "@/types/event";
 
-const statusOptions = [
+type DrawerMode = "closed" | "details";
+
+type InboxView =
+  | "open"
+  | "new"
+  | "contacted"
+  | "approved"
+  | "rejected"
+  | "all";
+
+type StatusOption = {
+  value: string;
+  label: string;
+};
+
+type PlanOption = {
+  value: string;
+  label: string;
+};
+
+const inquiriesPerPage = 25;
+
+const statusOptions: StatusOption[] = [
   {
     value: "new",
     label: "Neu",
@@ -28,7 +47,44 @@ const statusOptions = [
   },
 ];
 
-const planOptions = [
+const inboxViews: {
+  value: InboxView;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "open",
+    label: "Offen",
+    description: "Neu + kontaktiert",
+  },
+  {
+    value: "new",
+    label: "Neu",
+    description: "Noch nicht bearbeitet",
+  },
+  {
+    value: "contacted",
+    label: "Kontaktiert",
+    description: "In Abklärung",
+  },
+  {
+    value: "approved",
+    label: "Angenommen",
+    description: "Bereits in Verwaltung",
+  },
+  {
+    value: "rejected",
+    label: "Abgelehnt",
+    description: "Nicht übernehmen",
+  },
+  {
+    value: "all",
+    label: "Alle",
+    description: "Gesamtes Archiv",
+  },
+];
+
+const planOptions: PlanOption[] = [
   {
     value: "basic",
     label: "Event Basic",
@@ -101,7 +157,39 @@ function getPlanClassName(plan: string) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
-function formatDateTime(value: string) {
+function getStatusRank(status: string) {
+  if (status === "new") {
+    return 1;
+  }
+
+  if (status === "contacted") {
+    return 2;
+  }
+
+  if (status === "approved") {
+    return 3;
+  }
+
+  if (status === "rejected") {
+    return 4;
+  }
+
+  return 5;
+}
+
+function matchesInboxView(inquiry: EventInquiry, view: InboxView) {
+  if (view === "open") {
+    return inquiry.status === "new" || inquiry.status === "contacted";
+  }
+
+  if (view === "all") {
+    return true;
+  }
+
+  return inquiry.status === view;
+}
+
+function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return "Nicht angegeben";
   }
@@ -116,7 +204,7 @@ function formatDateTime(value: string) {
   });
 }
 
-function formatDate(value: string) {
+function formatDate(value: string | null | undefined) {
   if (!value) {
     return "Nicht angegeben";
   }
@@ -131,15 +219,23 @@ function formatDate(value: string) {
 
 export default function AdminEventInquiriesPage() {
   const [eventInquiries, setEventInquiries] = useState<EventInquiry[]>([]);
+
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
+  const [selectedInquiryId, setSelectedInquiryId] = useState<string | null>(
+    null
+  );
+
+  const [selectedInboxView, setSelectedInboxView] =
+    useState<InboxView>("open");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const [latestPublishedEvent, setLatestPublishedEvent] =
+    useState<LocarioEvent | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [updatingInquiryId, setUpdatingInquiryId] = useState<string | null>(
-    null
-  );
-  const [deletingInquiryId, setDeletingInquiryId] = useState<string | null>(
     null
   );
   const [creatingEventInquiryId, setCreatingEventInquiryId] = useState<
@@ -153,28 +249,65 @@ export default function AdminEventInquiriesPage() {
     loadEventInquiries();
   }, []);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedPlanFilter, selectedInboxView]);
+
+  const selectedInquiry = useMemo(() => {
+    if (!selectedInquiryId) {
+      return null;
+    }
+
+    return (
+      eventInquiries.find((inquiry) => inquiry.id === selectedInquiryId) ?? null
+    );
+  }, [eventInquiries, selectedInquiryId]);
+
   const filteredInquiries = useMemo(() => {
     const normalizedSearchQuery = normalizeText(searchQuery);
 
-    return eventInquiries.filter((inquiry) => {
-      const matchesSearch =
-        !normalizedSearchQuery ||
-        getInquirySearchText(inquiry).includes(normalizedSearchQuery);
+    return eventInquiries
+      .filter((inquiry) => {
+        const matchesSearch =
+          !normalizedSearchQuery ||
+          getInquirySearchText(inquiry).includes(normalizedSearchQuery);
 
-      const matchesStatus =
-        !selectedStatusFilter || inquiry.status === selectedStatusFilter;
+        const matchesPlan =
+          !selectedPlanFilter || inquiry.desiredPlan === selectedPlanFilter;
 
-      const matchesPlan =
-        !selectedPlanFilter || inquiry.desiredPlan === selectedPlanFilter;
+        return (
+          matchesSearch &&
+          matchesPlan &&
+          matchesInboxView(inquiry, selectedInboxView)
+        );
+      })
+      .sort((firstInquiry, secondInquiry) => {
+        const statusDifference =
+          getStatusRank(firstInquiry.status) -
+          getStatusRank(secondInquiry.status);
 
-      return matchesSearch && matchesStatus && matchesPlan;
-    });
-  }, [
-    eventInquiries,
-    searchQuery,
-    selectedStatusFilter,
-    selectedPlanFilter,
-  ]);
+        if (statusDifference !== 0) {
+          return statusDifference;
+        }
+
+        return (
+          new Date(secondInquiry.createdAt).getTime() -
+          new Date(firstInquiry.createdAt).getTime()
+        );
+      });
+  }, [eventInquiries, searchQuery, selectedPlanFilter, selectedInboxView]);
+
+  const pageCount = Math.max(
+    1,
+    Math.ceil(filteredInquiries.length / inquiriesPerPage)
+  );
+
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+
+  const paginatedInquiries = filteredInquiries.slice(
+    (safeCurrentPage - 1) * inquiriesPerPage,
+    safeCurrentPage * inquiriesPerPage
+  );
 
   const newInquiries = eventInquiries.filter(
     (inquiry) => inquiry.status === "new"
@@ -188,9 +321,20 @@ export default function AdminEventInquiriesPage() {
     (inquiry) => inquiry.status === "approved"
   );
 
+  const rejectedInquiries = eventInquiries.filter(
+    (inquiry) => inquiry.status === "rejected"
+  );
+
+  const openInquiries = eventInquiries.filter(
+    (inquiry) => inquiry.status === "new" || inquiry.status === "contacted"
+  );
+
   const premiumInquiries = eventInquiries.filter(
     (inquiry) => inquiry.desiredPlan === "premium"
   );
+
+  const hasActiveFilters =
+    searchQuery || selectedPlanFilter || selectedInboxView !== "open";
 
   async function loadEventInquiries() {
     try {
@@ -221,6 +365,7 @@ export default function AdminEventInquiriesPage() {
       setUpdatingInquiryId(id);
       setSuccessMessage("");
       setErrorMessage("");
+      setLatestPublishedEvent(null);
 
       const response = await fetch(`/api/event-inquiries/${id}`, {
         method: "PUT",
@@ -248,7 +393,11 @@ export default function AdminEventInquiriesPage() {
         )
       );
 
-      setSuccessMessage("Status wurde aktualisiert.");
+      setSuccessMessage("Status der Anfrage wurde aktualisiert.");
+
+      if (status === "approved" || status === "rejected") {
+        closeDrawer();
+      }
 
       setTimeout(() => {
         setSuccessMessage("");
@@ -273,13 +422,13 @@ export default function AdminEventInquiriesPage() {
   async function createEventFromInquiry(inquiry: EventInquiry) {
     if (!inquiry.eventDate) {
       setErrorMessage(
-        "Dieses Event kann noch nicht erstellt werden, weil kein Eventdatum angegeben wurde. Erstelle es manuell unter /admin/events oder bitte den Veranstalter um ein Datum."
+        "Dieses Event kann noch nicht angenommen werden, weil kein Eventdatum angegeben wurde. Kontaktiere zuerst den Veranstalter oder erstelle das Event später manuell unter Eventverwaltung."
       );
       return;
     }
 
     const confirmed = window.confirm(
-      `Möchtest du aus "${inquiry.eventTitle}" ein öffentliches Event erstellen?`
+      `Möchtest du "${inquiry.eventTitle}" annehmen und daraus ein Event in der Verwaltung erstellen?`
     );
 
     if (!confirmed) {
@@ -290,6 +439,7 @@ export default function AdminEventInquiriesPage() {
       setCreatingEventInquiryId(inquiry.id);
       setSuccessMessage("");
       setErrorMessage("");
+      setLatestPublishedEvent(null);
 
       const response = await fetch("/api/events", {
         method: "POST",
@@ -330,24 +480,25 @@ export default function AdminEventInquiriesPage() {
       }
 
       const createdEvent = (await response.json()) as LocarioEvent;
-
       const updatedInquiry = await updateInquiryStatus(inquiry.id, "approved");
 
       if (updatedInquiry) {
+        setLatestPublishedEvent(createdEvent);
         setSuccessMessage(
-          `Event wurde erstellt und veröffentlicht: ${createdEvent.title}`
+          `Event "${createdEvent.title}" wurde angenommen und in der Eventverwaltung erstellt.`
         );
+        closeDrawer();
 
         setTimeout(() => {
           setSuccessMessage("");
-        }, 5000);
+        }, 7000);
       }
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
       } else {
         setErrorMessage(
-          "Beim Erstellen des Events ist ein unbekannter Fehler passiert."
+          "Beim Annehmen der Event-Anfrage ist ein unbekannter Fehler passiert."
         );
       }
     } finally {
@@ -355,52 +506,23 @@ export default function AdminEventInquiriesPage() {
     }
   }
 
-  async function deleteInquiry(id: string, eventTitle: string) {
-    const confirmed = window.confirm(
-      `Möchtest du die Event-Anfrage "${eventTitle}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`
-    );
+  function openDetailsDrawer(inquiry: EventInquiry) {
+    setSelectedInquiryId(inquiry.id);
+    setDrawerMode("details");
+    setSuccessMessage("");
+    setErrorMessage("");
+    setLatestPublishedEvent(null);
+  }
 
-    if (!confirmed) {
-      return;
-    }
+  function closeDrawer() {
+    setDrawerMode("closed");
+  }
 
-    try {
-      setDeletingInquiryId(id);
-      setSuccessMessage("");
-      setErrorMessage("");
-
-      const response = await fetch(`/api/event-inquiries/${id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-
-        throw new Error(
-          errorData?.message || "Event-Anfrage konnte nicht gelöscht werden."
-        );
-      }
-
-      setEventInquiries((currentInquiries) =>
-        currentInquiries.filter((inquiry) => inquiry.id !== id)
-      );
-
-      setSuccessMessage("Event-Anfrage wurde gelöscht.");
-
-      setTimeout(() => {
-        setSuccessMessage("");
-      }, 3000);
-    } catch (error) {
-      if (error instanceof Error) {
-        setErrorMessage(error.message);
-      } else {
-        setErrorMessage(
-          "Beim Löschen der Event-Anfrage ist ein unbekannter Fehler passiert."
-        );
-      }
-    } finally {
-      setDeletingInquiryId(null);
-    }
+  function resetFilters() {
+    setSearchQuery("");
+    setSelectedPlanFilter("");
+    setSelectedInboxView("open");
+    setCurrentPage(1);
   }
 
   return (
@@ -409,148 +531,198 @@ export default function AdminEventInquiriesPage() {
         <div>
           <div className="inline-flex items-center gap-3 rounded-full border border-amber-300/25 bg-amber-300/10 px-4 py-2 text-sm font-bold text-amber-100">
             <span className="h-2 w-2 rounded-full bg-amber-300" />
-            Event-Anfragen
+            Event-Inbox
           </div>
 
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
-            Event-Anfragen{" "}
+            Anfragen{" "}
             <span className="bg-gradient-to-r from-amber-200 via-white to-cyan-200 bg-clip-text text-transparent">
-              verwalten
+              entscheiden
             </span>
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Prüfe neue Event-Werbeanfragen, kontaktiere Veranstalter, ändere den
-            Status oder erstelle daraus direkt ein öffentliches Event.
+            Hier werden nur Event-Anfragen geprüft. Nach dem Annehmen wird das
+            Event erstellt und danach unter Events verwaltet.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadEventInquiries}
-          disabled={isLoading}
-          className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoading ? "Lädt..." : "Aktualisieren"}
-        </button>
-      </div>
-
-      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard
-          title="Event-Anfragen"
-          value={eventInquiries.length.toString()}
-          description="Alle gespeicherten Anfragen"
-        />
-
-        <AdminStatCard
-          title="Neu"
-          value={newInquiries.length.toString()}
-          description="Noch nicht bearbeitet"
-        />
-
-        <AdminStatCard
-          title="Kontaktiert"
-          value={contactedInquiries.length.toString()}
-          description="In Bearbeitung"
-        />
-
-        <AdminStatCard
-          title="Premium"
-          value={premiumInquiries.length.toString()}
-          description={`${approvedInquiries.length} angenommen`}
-        />
-      </div>
-
-      {successMessage && (
-        <div className="mt-8 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
-          {successMessage}
-        </div>
-      )}
-
-      {errorMessage && (
-        <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
-          {errorMessage}
-        </div>
-      )}
-
-      <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end">
-          <div>
-            <p className="text-sm font-black uppercase tracking-wide text-amber-300">
-              Übersicht
-            </p>
-
-            <h2 className="mt-2 text-3xl font-black">
-              Eingegangene Event-Anfragen
-            </h2>
-
-            <p className="mt-3 text-slate-400">
-              Suche nach Event, Veranstalter, Ort, Kontaktperson oder Paket.
-            </p>
-          </div>
-
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Link
             href="/admin/events"
             className="rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 text-center text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
           >
-            Event manuell erstellen
+            Eventverwaltung
           </Link>
+
+          <button
+            type="button"
+            onClick={loadEventInquiries}
+            disabled={isLoading}
+            className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? "Lädt..." : "Aktualisieren"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-8 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        <CompactMetric label="Offen" value={openInquiries.length} />
+        <CompactMetric label="Neu" value={newInquiries.length} variant="amber" />
+        <CompactMetric
+          label="Kontaktiert"
+          value={contactedInquiries.length}
+          variant="cyan"
+        />
+        <CompactMetric
+          label="Angenommen"
+          value={approvedInquiries.length}
+          variant="emerald"
+        />
+        <CompactMetric
+          label="Abgelehnt"
+          value={rejectedInquiries.length}
+          variant="red"
+        />
+        <CompactMetric
+          label="Premium"
+          value={premiumInquiries.length}
+          variant="amber"
+        />
+      </div>
+
+      {successMessage && (
+        <div className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
+          <p>{successMessage}</p>
+
+          {latestPublishedEvent && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/admin/events"
+                className="rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200"
+              >
+                Zur Eventverwaltung
+              </Link>
+
+              <Link
+                href={`/events/${latestPublishedEvent.id}`}
+                className="rounded-2xl border border-emerald-300/30 px-4 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-300/10"
+              >
+                Öffentlich ansehen
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
+          {errorMessage}
+        </div>
+      )}
+
+      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+          <div>
+            <p className="text-sm font-black uppercase tracking-wide text-amber-300">
+              Arbeitsliste
+            </p>
+
+            <h2 className="mt-2 text-3xl font-black">Offene Entscheidungen</h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Standardmässig siehst du nur offene Event-Anfragen. Angenommene
+              Events verschwinden aus dieser Arbeitsliste.
+            </p>
+          </div>
+
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
+            >
+              Zur offenen Inbox
+            </button>
+          )}
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_13rem_13rem]">
+        <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {inboxViews.map((view) => {
+            const isActive = selectedInboxView === view.value;
+
+            return (
+              <button
+                key={view.value}
+                type="button"
+                onClick={() => setSelectedInboxView(view.value)}
+                className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  isActive
+                    ? "border-amber-300/40 bg-amber-300/10 text-amber-100"
+                    : "border-white/10 bg-slate-950/45 text-slate-300 hover:border-amber-300/30 hover:bg-white/[0.06]"
+                }`}
+              >
+                <span className="block font-black">{view.label}</span>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {view.description}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
           <InputField
-            label="Event-Anfragen suchen"
+            label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Event, Veranstalter, Ort, Kontakt..."
           />
 
-          <SelectField
-            label="Status"
-            value={selectedStatusFilter}
-            onChange={setSelectedStatusFilter}
-            options={[
-              {
-                value: "",
-                label: "Alle Status",
-              },
-              ...statusOptions,
-            ]}
-          />
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_1fr]">
+            <SelectField
+              label="Paket"
+              value={selectedPlanFilter}
+              onChange={setSelectedPlanFilter}
+              options={[
+                {
+                  value: "",
+                  label: "Alle Pakete",
+                },
+                ...planOptions,
+              ]}
+            />
 
-          <SelectField
-            label="Paket"
-            value={selectedPlanFilter}
-            onChange={setSelectedPlanFilter}
-            options={[
-              {
-                value: "",
-                label: "Alle Pakete",
-              },
-              ...planOptions,
-            ]}
-          />
+            <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+              Anfrage = nur prüfen, kontaktieren, annehmen oder ablehnen. Nach
+              dem Annehmen erfolgt die weitere Bearbeitung in der
+              Eventverwaltung.
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
-          <span className="font-black text-white">
-            {filteredInquiries.length}
-          </span>{" "}
-          von{" "}
-          <span className="font-black text-white">
-            {eventInquiries.length}
-          </span>{" "}
-          Event-Anfragen werden angezeigt.
+        <div className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 md:flex-row md:items-center">
+          <p>
+            <span className="font-black text-white">
+              {filteredInquiries.length}
+            </span>{" "}
+            Anfragen in dieser Ansicht.
+          </p>
+
+          <p className="text-slate-500">
+            Seite {safeCurrentPage} von {pageCount} · {inquiriesPerPage} pro
+            Seite
+          </p>
         </div>
 
         {isLoading && (
-          <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
             Event-Anfragen werden geladen...
           </div>
         )}
 
         {!isLoading && eventInquiries.length === 0 && (
-          <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
             Noch keine Event-Anfragen vorhanden.
           </div>
         )}
@@ -558,25 +730,46 @@ export default function AdminEventInquiriesPage() {
         {!isLoading &&
           eventInquiries.length > 0 &&
           filteredInquiries.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Keine Event-Anfrage passt zu deinem Filter.
+            <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+              In dieser Ansicht gibt es aktuell keine Anfrage.
             </div>
           )}
 
-        {!isLoading && filteredInquiries.length > 0 && (
-          <div className="mt-8 grid gap-5">
-            {filteredInquiries.map((inquiry) => {
+        {!isLoading && paginatedInquiries.length > 0 && (
+          <div className="mt-5 grid gap-3">
+            {paginatedInquiries.map((inquiry) => {
               const isCreatingEvent = creatingEventInquiryId === inquiry.id;
+              const isUpdating = updatingInquiryId === inquiry.id;
               const eventCanBeCreated = Boolean(inquiry.eventDate);
+              const isClosed =
+                inquiry.status === "approved" || inquiry.status === "rejected";
 
               return (
                 <article
                   key={inquiry.id}
-                  className="overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/60 p-5 shadow-xl shadow-slate-950/20 transition hover:border-amber-300/30 hover:bg-white/[0.06]"
+                  className={`rounded-3xl border p-4 transition ${
+                    inquiry.status === "new"
+                      ? "border-amber-300/20 bg-amber-300/10"
+                      : inquiry.status === "contacted"
+                        ? "border-cyan-300/20 bg-cyan-300/10"
+                        : inquiry.status === "approved"
+                          ? "border-emerald-300/20 bg-emerald-300/10"
+                          : inquiry.status === "rejected"
+                            ? "border-red-300/20 bg-red-300/10"
+                            : "border-white/10 bg-slate-950/45"
+                  }`}
                 >
-                  <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap gap-2">
+                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.9fr)_auto] xl:items-center">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openDetailsDrawer(inquiry)}
+                          className="break-words text-left text-xl font-black text-white transition hover:text-amber-100"
+                        >
+                          {inquiry.eventTitle}
+                        </button>
+
                         <span
                           className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClassName(
                             inquiry.status
@@ -592,173 +785,96 @@ export default function AdminEventInquiriesPage() {
                         >
                           {getEventPlanLabel(inquiry.desiredPlan)}
                         </span>
-
-                        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-slate-300">
-                          {inquiry.city}
-                        </span>
-
-                        <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-black text-slate-300">
-                          {inquiry.category}
-                        </span>
                       </div>
 
-                      <h3 className="mt-4 break-words text-3xl font-black tracking-tight">
-                        {inquiry.eventTitle}
-                      </h3>
-
-                      <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Veranstalter: {inquiry.organizerName}
+                      <p className="mt-2 text-sm text-slate-300">
+                        {inquiry.city} · {inquiry.category} ·{" "}
+                        {formatDate(inquiry.eventDate)}
                       </p>
 
-                      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        <InfoBox title="Kontakt" value={inquiry.contactName} />
-
-                        <InfoBox title="E-Mail" value={inquiry.email} />
-
-                        <InfoBox
-                          title="Telefon"
-                          value={inquiry.phone || "Nicht angegeben"}
-                        />
-
-                        <InfoBox
-                          title="Eventdatum"
-                          value={formatDate(inquiry.eventDate)}
-                        />
-                      </div>
-
-                      <div className="mt-5 grid gap-3 md:grid-cols-2">
-                        <InfoBox
-                          title="Location"
-                          value={inquiry.locationName || "Nicht angegeben"}
-                        />
-
-                        <InfoBox
-                          title="Website"
-                          value={inquiry.website || "Nicht angegeben"}
-                        />
-                      </div>
-
-                      {!eventCanBeCreated && (
-                        <div className="mt-5 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 text-amber-100">
-                          Dieses Event hat noch kein Eventdatum. Es kann erst
-                          automatisch veröffentlicht werden, wenn ein Datum
-                          vorhanden ist.
-                        </div>
+                      {!eventCanBeCreated && !isClosed && (
+                        <p className="mt-2 text-xs font-bold text-amber-100">
+                          Kein Eventdatum vorhanden. Vor dem Annehmen zuerst
+                          Kontakt aufnehmen.
+                        </p>
                       )}
+                    </div>
 
-                      <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-                        <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                          Beschreibung
-                        </p>
+                    <div className="min-w-0 text-sm text-slate-300">
+                      <p className="truncate font-bold text-white">
+                        {inquiry.contactName}
+                      </p>
 
-                        <p className="mt-3 whitespace-pre-line break-words text-slate-300">
-                          {inquiry.description}
-                        </p>
-                      </div>
+                      <p className="mt-1 truncate text-slate-400">
+                        {inquiry.email}
+                      </p>
 
-                      <div className="mt-5 rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5">
-                        <p className="text-xs font-black uppercase tracking-wide text-amber-100">
-                          Nachricht an Locario
-                        </p>
-
-                        <p className="mt-3 whitespace-pre-line break-words text-slate-300">
-                          {inquiry.message}
-                        </p>
-                      </div>
-
-                      {inquiry.tags.length > 0 && (
-                        <div className="mt-5 flex flex-wrap gap-2">
-                          {inquiry.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
-                            >
-                              {tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <p className="mt-5 text-xs text-slate-500">
-                        Eingegangen: {formatDateTime(inquiry.createdAt)} · Paket:{" "}
-                        {getEventPlanPrice(inquiry.desiredPlan)}
+                      <p className="mt-1 text-xs text-slate-500">
+                        Eingang: {formatDateTime(inquiry.createdAt)}
                       </p>
                     </div>
 
-                    <div className="flex w-full flex-col gap-3 lg:w-56">
-                      <SelectField
-                        label="Status ändern"
-                        value={inquiry.status}
-                        onChange={(value) =>
-                          updateInquiryStatus(inquiry.id, value)
-                        }
-                        options={statusOptions}
-                        disabled={updatingInquiryId === inquiry.id}
-                      />
-
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
                       <button
                         type="button"
-                        onClick={() => createEventFromInquiry(inquiry)}
-                        disabled={
-                          isCreatingEvent ||
-                          !eventCanBeCreated ||
-                          inquiry.status === "approved"
-                        }
-                        className="rounded-2xl bg-gradient-to-r from-amber-300 to-orange-400 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+                        onClick={() => openDetailsDrawer(inquiry)}
+                        className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
                       >
-                        {isCreatingEvent
-                          ? "Wird erstellt..."
-                          : inquiry.status === "approved"
-                            ? "Bereits angenommen"
-                            : "Annehmen & Event erstellen"}
+                        Details
                       </button>
 
                       <a
                         href={`mailto:${inquiry.email}`}
-                        className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-200"
+                        className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
                       >
-                        E-Mail schreiben
+                        Kontakt
                       </a>
 
-                      {inquiry.phone && (
-                        <a
-                          href={`tel:${inquiry.phone}`}
-                          className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
+                      {inquiry.status === "new" && (
+                        <button
+                          type="button"
+                          disabled={isUpdating || isCreatingEvent}
+                          onClick={() =>
+                            updateInquiryStatus(inquiry.id, "contacted")
+                          }
+                          className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Anrufen
-                        </a>
+                          Kontaktiert
+                        </button>
                       )}
 
-                      {inquiry.website && (
-                        <a
-                          href={inquiry.website}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
-                        >
-                          Website öffnen
-                        </a>
+                      {!isClosed && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => createEventFromInquiry(inquiry)}
+                            disabled={isCreatingEvent || !eventCanBeCreated}
+                            className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isCreatingEvent ? "Erstellt..." : "Annehmen"}
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isUpdating || isCreatingEvent}
+                            onClick={() =>
+                              updateInquiryStatus(inquiry.id, "rejected")
+                            }
+                            className="rounded-xl border border-red-400/30 px-3 py-2 text-xs font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Ablehnen
+                          </button>
+                        </>
                       )}
 
-                      <Link
-                        href="/admin/events"
-                        className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-center text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
-                      >
-                        Event manuell erstellen
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() =>
-                          deleteInquiry(inquiry.id, inquiry.eventTitle)
-                        }
-                        disabled={deletingInquiryId === inquiry.id}
-                        className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {deletingInquiryId === inquiry.id
-                          ? "Löscht..."
-                          : "Löschen"}
-                      </button>
+                      {inquiry.status === "approved" && (
+                        <Link
+                          href="/admin/events"
+                          className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10"
+                        >
+                          In Verwaltung
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -766,30 +882,370 @@ export default function AdminEventInquiriesPage() {
             })}
           </div>
         )}
+
+        {!isLoading && filteredInquiries.length > inquiriesPerPage && (
+          <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Zurück
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              Seite{" "}
+              <span className="font-black text-white">{safeCurrentPage}</span>{" "}
+              von <span className="font-black text-white">{pageCount}</span>
+            </p>
+
+            <button
+              type="button"
+              disabled={safeCurrentPage >= pageCount}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(pageCount, page + 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter
+            </button>
+          </div>
+        )}
       </section>
+
+      <EventInquiryDrawer
+        mode={drawerMode}
+        inquiry={selectedInquiry}
+        updatingInquiryId={updatingInquiryId}
+        creatingEventInquiryId={creatingEventInquiryId}
+        onClose={closeDrawer}
+        onUpdateStatus={updateInquiryStatus}
+        onCreateEvent={createEventFromInquiry}
+      />
     </section>
   );
 }
 
-function AdminStatCard({
-  title,
-  value,
-  description,
+function EventInquiryDrawer({
+  mode,
+  inquiry,
+  updatingInquiryId,
+  creatingEventInquiryId,
+  onClose,
+  onUpdateStatus,
+  onCreateEvent,
 }: {
-  title: string;
-  value: string;
-  description: string;
+  mode: DrawerMode;
+  inquiry: EventInquiry | null;
+  updatingInquiryId: string | null;
+  creatingEventInquiryId: string | null;
+  onClose: () => void;
+  onUpdateStatus: (id: string, status: string) => void;
+  onCreateEvent: (inquiry: EventInquiry) => void;
 }) {
+  if (mode === "closed" || !inquiry) {
+    return null;
+  }
+
+  const isUpdating = updatingInquiryId === inquiry.id;
+  const isCreatingEvent = creatingEventInquiryId === inquiry.id;
+  const eventCanBeCreated = Boolean(inquiry.eventDate);
+  const isClosed =
+    inquiry.status === "approved" || inquiry.status === "rejected";
+
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm">
+      <div className="flex min-h-screen justify-end">
+        <aside className="h-screen w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl shadow-slate-950/50 md:p-8">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-6 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-amber-300">
+                Anfrage prüfen
+              </p>
+
+              <h2 className="mt-2 break-words text-4xl font-black tracking-tight">
+                {inquiry.eventTitle}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-slate-400">
+                Eingegangen am {formatDateTime(inquiry.createdAt)} von{" "}
+                {inquiry.contactName}. Diese Ansicht ist nur für die
+                Entscheidung gedacht.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
+            >
+              Schliessen
+            </button>
+          </div>
+
+          <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
+            <div className="space-y-5">
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Entscheidung
+                </p>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClassName(
+                      inquiry.status
+                    )}`}
+                  >
+                    {getStatusLabel(inquiry.status)}
+                  </span>
+
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanClassName(
+                      inquiry.desiredPlan
+                    )}`}
+                  >
+                    {getEventPlanLabel(inquiry.desiredPlan)}
+                  </span>
+                </div>
+
+                {!eventCanBeCreated && !isClosed && (
+                  <div className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm leading-6 text-amber-100">
+                    Dieses Event hat noch kein Eventdatum. Kontaktiere zuerst
+                    den Veranstalter, bevor du es annimmst.
+                  </div>
+                )}
+
+                <div className="mt-5 grid gap-3">
+                  {inquiry.status === "approved" && (
+                    <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-4 py-3 text-sm font-black text-emerald-100">
+                      Diese Anfrage wurde angenommen. Änderungen erfolgen jetzt
+                      in der Eventverwaltung.
+                    </div>
+                  )}
+
+                  {inquiry.status === "rejected" && (
+                    <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-black text-red-200">
+                      Diese Anfrage wurde abgelehnt.
+                    </div>
+                  )}
+
+                  {!isClosed && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onCreateEvent(inquiry)}
+                        disabled={isCreatingEvent || !eventCanBeCreated}
+                        className="rounded-2xl bg-emerald-300 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {isCreatingEvent
+                          ? "Event wird erstellt..."
+                          : "Annehmen & Event erstellen"}
+                      </button>
+
+                      {inquiry.status === "new" && (
+                        <button
+                          type="button"
+                          disabled={isUpdating || isCreatingEvent}
+                          onClick={() =>
+                            onUpdateStatus(inquiry.id, "contacted")
+                          }
+                          className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Als kontaktiert markieren
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={isUpdating || isCreatingEvent}
+                        onClick={() => onUpdateStatus(inquiry.id, "rejected")}
+                        className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Anfrage ablehnen
+                      </button>
+                    </>
+                  )}
+
+                  {inquiry.status === "approved" && (
+                    <Link
+                      href="/admin/events"
+                      className="rounded-2xl bg-emerald-300 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+                    >
+                      Zur Eventverwaltung
+                    </Link>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Kontakt
+                </p>
+
+                <div className="mt-4 grid gap-3">
+                  <a
+                    href={`mailto:${inquiry.email}`}
+                    className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
+                  >
+                    E-Mail schreiben
+                  </a>
+
+                  {inquiry.phone && (
+                    <a
+                      href={`tel:${inquiry.phone}`}
+                      className="rounded-2xl border border-amber-300/30 px-4 py-3 text-center text-sm font-black text-amber-100 transition hover:bg-amber-300/10"
+                    >
+                      Anrufen
+                    </a>
+                  )}
+
+                  {inquiry.website && (
+                    <a
+                      href={inquiry.website}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
+                    >
+                      Website öffnen
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Beim Annehmen
+                </p>
+
+                <p className="mt-3 text-2xl font-black text-white">
+                  {getEventPlanLabel(inquiry.desiredPlan)}
+                </p>
+
+                <p className="mt-2 text-sm font-black text-amber-100">
+                  {getEventPlanPrice(inquiry.desiredPlan)}
+                </p>
+
+                <p className="mt-4 text-sm leading-6 text-slate-300">
+                  Nach dem Annehmen wird daraus ein Eventeintrag. Ab dann wird
+                  das Event nur noch unter /admin/events bearbeitet.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <DetailBox title="Veranstalter" value={inquiry.organizerName} />
+                <DetailBox title="Kategorie" value={inquiry.category} />
+                <DetailBox title="Kontaktperson" value={inquiry.contactName} />
+                <DetailBox title="E-Mail" value={inquiry.email} />
+                <DetailBox
+                  title="Telefon"
+                  value={inquiry.phone || "Nicht angegeben"}
+                />
+                <DetailBox title="Stadt" value={inquiry.city} />
+                <DetailBox
+                  title="Location"
+                  value={inquiry.locationName || "Nicht angegeben"}
+                />
+                <DetailBox
+                  title="Eventdatum"
+                  value={formatDateTime(inquiry.eventDate)}
+                />
+                <DetailBox
+                  title="Website"
+                  value={inquiry.website || "Nicht angegeben"}
+                />
+                <DetailBox
+                  title="Eingang"
+                  value={formatDateTime(inquiry.createdAt)}
+                />
+              </div>
+
+              <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                  Beschreibung
+                </p>
+
+                <p className="mt-3 whitespace-pre-line break-words text-sm leading-7 text-slate-300">
+                  {inquiry.description}
+                </p>
+              </section>
+
+              <section className="rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-amber-100">
+                  Nachricht an Locario
+                </p>
+
+                <p className="mt-3 whitespace-pre-line break-words text-sm leading-7 text-slate-300">
+                  {inquiry.message}
+                </p>
+              </section>
+
+              {inquiry.tags.length > 0 && (
+                <section>
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Tags
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {inquiry.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function CompactMetric({
+  label,
+  value,
+  variant = "cyan",
+}: {
+  label: string;
+  value: number;
+  variant?: "cyan" | "emerald" | "amber" | "red";
+}) {
+  const valueClassName =
+    variant === "emerald"
+      ? "text-emerald-200"
+      : variant === "amber"
+        ? "text-amber-200"
+        : variant === "red"
+          ? "text-red-200"
+          : "text-cyan-200";
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+
+      <p className={`mt-1 text-3xl font-black ${valueClassName}`}>{value}</p>
+    </div>
+  );
+}
+
+function DetailBox({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {title}
       </p>
 
-      <p className="mt-4 text-5xl font-black text-amber-200">{value}</p>
-
-      <p className="mt-3 text-sm text-slate-300">{description}</p>
-    </article>
+      <p className="mt-2 break-words text-sm text-slate-300">{value}</p>
+    </div>
   );
 }
 
@@ -823,7 +1279,6 @@ function SelectField({
   value,
   onChange,
   options,
-  disabled = false,
 }: {
   label: string;
   value: string;
@@ -832,7 +1287,6 @@ function SelectField({
     value: string;
     label: string;
   }[];
-  disabled?: boolean;
 }) {
   return (
     <div>
@@ -841,8 +1295,7 @@ function SelectField({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-amber-300"
       >
         {options.map((option) => (
           <option
@@ -857,16 +1310,3 @@ function SelectField({
     </div>
   );
 }
-
-function InfoBox({ title, value }: { title: string; value: string }) {
-  return (
-    <div className="min-w-0 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-        {title}
-      </p>
-
-      <p className="mt-2 break-words text-sm font-bold text-white">{value}</p>
-    </div>
-  );
-}
-

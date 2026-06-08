@@ -1,6 +1,9 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { canCompanyUseAdvertising } from "@/data/plans";
+import {
+  canCompanyUseAdvertising,
+  canCompanyUsePartnerDashboard,
+} from "@/data/plans";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -44,6 +47,7 @@ type CompanyInquiryFromDatabase = {
 type CompanyWithAd = {
   id: string;
   name: string;
+  imageUrl: string | null;
   accessToken: string | null;
   plan: string;
   mainCategory: string;
@@ -64,8 +68,18 @@ type CompanyWithAd = {
   } | null;
 };
 
+const allowedPlans = ["pilot", "starter", "pro", "premium"];
+
 function createAccessToken() {
   return randomUUID().replace(/-/g, "");
+}
+
+function getValidPlan(plan: string | undefined) {
+  if (plan && allowedPlans.includes(plan)) {
+    return plan;
+  }
+
+  return "starter";
 }
 
 function parseJsonArray(value: string | null | undefined): string[] {
@@ -87,10 +101,14 @@ function parseJsonArray(value: string | null | undefined): string[] {
 }
 
 function mapCompany(company: CompanyWithAd) {
+  const shouldShowAccessToken = canCompanyUsePartnerDashboard(company.plan);
+  const shouldShowAd = canCompanyUseAdvertising(company.plan);
+
   return {
     id: company.id,
     name: company.name,
-    accessToken: company.accessToken ?? "",
+    imageUrl: company.imageUrl ?? "",
+    accessToken: shouldShowAccessToken ? company.accessToken ?? "" : "",
     plan: company.plan,
     mainCategory: company.mainCategory,
     subCategory: company.subCategory,
@@ -103,13 +121,14 @@ function mapCompany(company: CompanyWithAd) {
     description: company.description,
     tags: parseJsonArray(company.tags),
     searchTerms: parseJsonArray(company.searchTerms),
-    ad: company.ad
-      ? {
-          title: company.ad.title,
-          description: company.ad.description,
-          cta: company.ad.cta,
-        }
-      : undefined,
+    ad:
+      company.ad && shouldShowAd
+        ? {
+            title: company.ad.title,
+            description: company.ad.description,
+            cta: company.ad.cta,
+          }
+        : undefined,
   };
 }
 
@@ -206,6 +225,8 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
+  const plan = getValidPlan(inquiry.desiredPlan);
+
   const subCategories = parseJsonArray(inquiry.subCategories);
   const tags = parseJsonArray(inquiry.tags);
   const existingSearchTerms = parseJsonArray(inquiry.searchTerms);
@@ -232,7 +253,8 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
-  const advertisingAllowed = canCompanyUseAdvertising(inquiry.desiredPlan);
+  const partnerDashboardAllowed = canCompanyUsePartnerDashboard(plan);
+  const advertisingAllowed = canCompanyUseAdvertising(plan);
 
   const hasAd =
     advertisingAllowed &&
@@ -240,9 +262,12 @@ export async function POST(_request: Request, context: RouteContext) {
       inquiry.adDescription?.trim() ||
       inquiry.adCta?.trim());
 
+  const normalizedSubCategories =
+    subCategories.length > 0 ? subCategories : [primarySubCategory];
+
   const searchTerms = buildSearchTerms(
     inquiry.mainCategory,
-    subCategories,
+    normalizedSubCategories,
     tags,
     existingSearchTerms
   );
@@ -251,15 +276,14 @@ export async function POST(_request: Request, context: RouteContext) {
     const company = await tx.company.create({
       data: {
         name: inquiry.companyName.trim(),
-        accessToken: createAccessToken(),
-        plan: inquiry.desiredPlan,
+        imageUrl: null,
+        accessToken: partnerDashboardAllowed ? createAccessToken() : null,
+        plan,
 
-        mainCategory: inquiry.mainCategory,
-        subCategory: primarySubCategory,
-        subCategories: JSON.stringify(
-          subCategories.length > 0 ? subCategories : [primarySubCategory]
-        ),
-        category: primarySubCategory,
+        mainCategory: inquiry.mainCategory.trim(),
+        subCategory: primarySubCategory.trim(),
+        subCategories: JSON.stringify(normalizedSubCategories),
+        category: primarySubCategory.trim(),
 
         city: inquiry.city.trim(),
         phone: inquiry.phone?.trim() || null,

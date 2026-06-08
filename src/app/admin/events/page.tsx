@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   ChangeEvent,
   FormEvent,
@@ -15,6 +16,8 @@ import {
   getEventPlanRank,
 } from "@/data/event-plans";
 import type { LocarioEvent } from "@/types/event";
+
+type DrawerMode = "closed" | "create" | "edit" | "details";
 
 type EventForm = {
   title: string;
@@ -39,6 +42,8 @@ type EventForm = {
   isActive: boolean;
   highlightUntil: string;
 };
+
+const eventsPerPage = 25;
 
 const eventCategories = [
   "Konzert",
@@ -81,7 +86,7 @@ function normalizeText(value: string) {
   return value.toLowerCase().trim();
 }
 
-function toInputDateTime(value: string) {
+function toInputDateTime(value: string | null | undefined) {
   if (!value) {
     return "";
   }
@@ -98,7 +103,7 @@ function toInputDateTime(value: string) {
   return localDate.toISOString().slice(0, 16);
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) {
     return "Nicht gesetzt";
   }
@@ -150,14 +155,27 @@ function getPlanBadgeClassName(plan: string | undefined) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
+function getEventStatusClassName(isActive: boolean) {
+  if (isActive) {
+    return "border-emerald-300/30 bg-emerald-300/10 text-emerald-100";
+  }
+
+  return "border-red-300/30 bg-red-300/10 text-red-100";
+}
+
 export default function AdminEventsPage() {
   const [events, setEvents] = useState<LocarioEvent[]>([]);
   const [form, setForm] = useState<EventForm>(emptyForm);
+
+  const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const [eventSearchQuery, setEventSearchQuery] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState("");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -167,11 +185,28 @@ export default function AdminEventsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
-  const isEditing = Boolean(editingEventId);
+  const isEditing = drawerMode === "edit" && Boolean(editingEventId);
 
   useEffect(() => {
     loadEvents();
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    eventSearchQuery,
+    selectedPlanFilter,
+    selectedStatusFilter,
+    selectedCategoryFilter,
+  ]);
+
+  const selectedEvent = useMemo(() => {
+    if (!selectedEventId) {
+      return null;
+    }
+
+    return events.find((event) => event.id === selectedEventId) ?? null;
+  }, [events, selectedEventId]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearchQuery = normalizeText(eventSearchQuery);
@@ -190,24 +225,53 @@ export default function AdminEventsPage() {
           (selectedStatusFilter === "active" && event.isActive) ||
           (selectedStatusFilter === "inactive" && !event.isActive);
 
-        return matchesSearch && matchesPlan && matchesStatus;
+        const matchesCategory =
+          !selectedCategoryFilter || event.category === selectedCategoryFilter;
+
+        return matchesSearch && matchesPlan && matchesStatus && matchesCategory;
       })
-      .sort((a, b) => {
+      .sort((firstEvent, secondEvent) => {
+        const firstStartsAt = new Date(firstEvent.startsAt).getTime();
+        const secondStartsAt = new Date(secondEvent.startsAt).getTime();
+
         const planDifference =
-          getEventPlanRank(b.plan) - getEventPlanRank(a.plan);
+          getEventPlanRank(secondEvent.plan) - getEventPlanRank(firstEvent.plan);
 
         if (planDifference !== 0) {
           return planDifference;
         }
 
-        return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+        return firstStartsAt - secondStartsAt;
       });
-  }, [events, eventSearchQuery, selectedPlanFilter, selectedStatusFilter]);
+  }, [
+    events,
+    eventSearchQuery,
+    selectedPlanFilter,
+    selectedStatusFilter,
+    selectedCategoryFilter,
+  ]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredEvents.length / eventsPerPage));
+  const safeCurrentPage = Math.min(currentPage, pageCount);
+
+  const paginatedEvents = filteredEvents.slice(
+    (safeCurrentPage - 1) * eventsPerPage,
+    safeCurrentPage * eventsPerPage
+  );
 
   const activeEvents = events.filter((event) => event.isActive);
   const inactiveEvents = events.filter((event) => !event.isActive);
   const highlightedEvents = events.filter((event) => isHighlightedEvent(event));
   const eventsWithImages = events.filter((event) => eventHasImage(event));
+  const basicEvents = events.filter((event) => event.plan === "basic");
+  const highlightEvents = events.filter((event) => event.plan === "highlight");
+  const premiumEvents = events.filter((event) => event.plan === "premium");
+
+  const hasActiveFilters =
+    eventSearchQuery ||
+    selectedPlanFilter ||
+    selectedStatusFilter ||
+    selectedCategoryFilter;
 
   async function loadEvents() {
     try {
@@ -236,6 +300,14 @@ export default function AdminEventsPage() {
       ...currentForm,
       [field]: value,
     }));
+  }
+
+  function resetFilters() {
+    setEventSearchQuery("");
+    setSelectedPlanFilter("");
+    setSelectedStatusFilter("");
+    setSelectedCategoryFilter("");
+    setCurrentPage(1);
   }
 
   async function uploadEventImage(event: ChangeEvent<HTMLInputElement>) {
@@ -294,6 +366,62 @@ export default function AdminEventsPage() {
 
   function removeEventImage() {
     updateField("imageUrl", "");
+  }
+
+  function openCreateDrawer() {
+    setForm(emptyForm);
+    setEditingEventId(null);
+    setSelectedEventId(null);
+    setDrawerMode("create");
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function openDetailsDrawer(event: LocarioEvent) {
+    setSelectedEventId(event.id);
+    setEditingEventId(null);
+    setDrawerMode("details");
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function openEditDrawer(event: LocarioEvent) {
+    setEditingEventId(event.id);
+    setSelectedEventId(event.id);
+    setDrawerMode("edit");
+
+    setForm({
+      title: event.title,
+      imageUrl: event.imageUrl || "",
+
+      organizerName: event.organizerName,
+      category: event.category,
+      plan: event.plan || "basic",
+
+      city: event.city,
+      locationName: event.locationName,
+      address: event.address,
+
+      description: event.description,
+
+      startsAt: toInputDateTime(event.startsAt),
+      endsAt: toInputDateTime(event.endsAt),
+
+      website: event.website,
+      ticketUrl: event.ticketUrl,
+
+      isActive: event.isActive,
+      highlightUntil: toInputDateTime(event.highlightUntil),
+    });
+
+    setSuccessMessage("");
+    setErrorMessage("");
+  }
+
+  function closeDrawer() {
+    setDrawerMode("closed");
+    setEditingEventId(null);
+    setForm(emptyForm);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -368,6 +496,8 @@ export default function AdminEventsPage() {
 
       setForm(emptyForm);
       setEditingEventId(null);
+      setSelectedEventId(savedEvent.id);
+      setDrawerMode("details");
 
       setTimeout(() => {
         setSuccessMessage("");
@@ -381,49 +511,6 @@ export default function AdminEventsPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
-
-  function startEditingEvent(event: LocarioEvent) {
-    setEditingEventId(event.id);
-
-    setForm({
-      title: event.title,
-      imageUrl: event.imageUrl || "",
-
-      organizerName: event.organizerName,
-      category: event.category,
-      plan: event.plan || "basic",
-
-      city: event.city,
-      locationName: event.locationName,
-      address: event.address,
-
-      description: event.description,
-
-      startsAt: toInputDateTime(event.startsAt),
-      endsAt: toInputDateTime(event.endsAt),
-
-      website: event.website,
-      ticketUrl: event.ticketUrl,
-
-      isActive: event.isActive,
-      highlightUntil: toInputDateTime(event.highlightUntil),
-    });
-
-    setSuccessMessage("");
-    setErrorMessage("");
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  }
-
-  function cancelEditing() {
-    setEditingEventId(null);
-    setForm(emptyForm);
-    setSuccessMessage("");
-    setErrorMessage("");
   }
 
   async function deleteEvent(id: string, title: string) {
@@ -447,15 +534,18 @@ export default function AdminEventsPage() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
 
-        throw new Error(errorData?.message || "Event konnte nicht gelöscht werden.");
+        throw new Error(
+          errorData?.message || "Event konnte nicht gelöscht werden."
+        );
       }
 
       setEvents((currentEvents) =>
         currentEvents.filter((eventItem) => eventItem.id !== id)
       );
 
-      if (editingEventId === id) {
-        cancelEditing();
+      if (selectedEventId === id) {
+        closeDrawer();
+        setSelectedEventId(null);
       }
 
       setSuccessMessage("Event wurde erfolgreich gelöscht.");
@@ -486,277 +576,92 @@ export default function AdminEventsPage() {
           <h1 className="mt-6 text-5xl font-black tracking-tight md:text-7xl">
             Events{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              verwalten
+              Tabelle
             </span>
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Erfasse regionale Events, Veranstalter, Bilder, Orte, Ticketlinks
-            und Wochenpakete für die öffentliche Events-Seite.
+            Volle Admin-Breite für viele Events. Details und Bearbeitung öffnen
+            sich separat im Drawer.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadEvents}
-          disabled={isLoading}
-          className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {isLoading ? "Lädt..." : "Aktualisieren"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={openCreateDrawer}
+            className="rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
+          >
+            Neues Event
+          </button>
+
+          <button
+            type="button"
+            onClick={loadEvents}
+            disabled={isLoading}
+            className="rounded-3xl border border-white/15 px-6 py-4 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoading ? "Lädt..." : "Aktualisieren"}
+          </button>
+        </div>
       </div>
 
-      <div className="mt-10 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard
-          title="Events"
-          value={events.length.toString()}
-          description="Gespeicherte Events"
-        />
-
-        <AdminStatCard
-          title="Aktiv"
-          value={activeEvents.length.toString()}
-          description={`${inactiveEvents.length} deaktiviert`}
-        />
-
-        <AdminStatCard
-          title="Highlights"
-          value={highlightedEvents.length.toString()}
-          description="Highlight oder Premium"
-        />
-
-        <AdminStatCard
-          title="Bilder"
-          value={eventsWithImages.length.toString()}
-          description="Events mit Titelbild"
-        />
+      <div className="mt-8 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
+        <CompactMetric label="Alle" value={events.length} />
+        <CompactMetric label="Aktiv" value={activeEvents.length} />
+        <CompactMetric label="Inaktiv" value={inactiveEvents.length} />
+        <CompactMetric label="Basic" value={basicEvents.length} />
+        <CompactMetric label="Highlight" value={highlightEvents.length} />
+        <CompactMetric label="Premium" value={premiumEvents.length} />
+        <CompactMetric label="Bilder" value={eventsWithImages.length} />
       </div>
 
       {successMessage && (
-        <div className="mt-8 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
+        <div className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
           {successMessage}
         </div>
       )}
 
       {errorMessage && (
-        <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
+        <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
           {errorMessage}
         </div>
       )}
 
-      <div className="mt-10 grid gap-8 xl:grid-cols-[0.95fr_1.15fr]">
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-          <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
-            <div>
-              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Formular
-              </p>
-
-              <h2 className="mt-2 text-3xl font-black">
-                {isEditing ? "Event bearbeiten" : "Event hinzufügen"}
-              </h2>
-
-              <p className="mt-3 text-slate-400">
-                Trage Veranstaltungsdaten, Bild, Ort, Zeitraum und Event-Paket
-                ein.
-              </p>
-            </div>
-
-            {isEditing && (
-              <button
-                type="button"
-                onClick={cancelEditing}
-                className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
-              >
-                Abbrechen
-              </button>
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-            <InputField
-              label="Eventtitel"
-              value={form.title}
-              onChange={(value) => updateField("title", value)}
-              placeholder="Zum Beispiel: Sommerfest Wattenwil"
-              required
-            />
-
-            <ImageUploadField
-              imageUrl={form.imageUrl}
-              isUploading={isUploadingImage}
-              onUpload={uploadEventImage}
-              onRemove={removeEventImage}
-            />
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <InputField
-                label="Veranstalter"
-                value={form.organizerName}
-                onChange={(value) => updateField("organizerName", value)}
-                placeholder="Zum Beispiel: Musikverein Wattenwil"
-                required
-              />
-
-              <SelectField
-                label="Kategorie"
-                value={form.category}
-                onChange={(value) => updateField("category", value)}
-                placeholder="Kategorie auswählen"
-                options={eventCategories}
-                required
-              />
-            </div>
-
-            <EventPlanSelect
-              label="Wochenpaket"
-              value={form.plan}
-              onChange={(value) => updateField("plan", value)}
-            />
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <InputField
-                label="Stadt / Region"
-                value={form.city}
-                onChange={(value) => updateField("city", value)}
-                placeholder="Zum Beispiel: Bern"
-                required
-              />
-
-              <InputField
-                label="Ort / Location"
-                value={form.locationName}
-                onChange={(value) => updateField("locationName", value)}
-                placeholder="Zum Beispiel: Dorfplatz"
-              />
-            </div>
-
-            <InputField
-              label="Adresse"
-              value={form.address}
-              onChange={(value) => updateField("address", value)}
-              placeholder="Strasse, Hausnummer"
-            />
-
-            <TextareaField
-              label="Beschreibung"
-              value={form.description}
-              onChange={(value) => updateField("description", value)}
-              placeholder="Beschreibe das Event kurz und ansprechend."
-              rows={5}
-              required
-            />
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <InputField
-                label="Startdatum / Startzeit"
-                type="datetime-local"
-                value={form.startsAt}
-                onChange={(value) => updateField("startsAt", value)}
-                placeholder=""
-                required
-              />
-
-              <InputField
-                label="Enddatum / Endzeit"
-                type="datetime-local"
-                value={form.endsAt}
-                onChange={(value) => updateField("endsAt", value)}
-                placeholder=""
-              />
-            </div>
-
-            <div className="grid gap-5 md:grid-cols-2">
-              <InputField
-                label="Website"
-                value={form.website}
-                onChange={(value) => updateField("website", value)}
-                placeholder="https://www.event.ch"
-              />
-
-              <InputField
-                label="Ticketlink"
-                value={form.ticketUrl}
-                onChange={(value) => updateField("ticketUrl", value)}
-                placeholder="https://tickets.example.ch"
-              />
-            </div>
-
-            <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-              <h3 className="text-xl font-black text-cyan-100">
-                Sichtbarkeit
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-300">
-                Aktive Events erscheinen öffentlich auf der Events-Seite.
-                Highlight/Premium wird stärker dargestellt.
-              </p>
-
-              <label className="mt-5 flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(event) =>
-                    updateField("isActive", event.target.checked)
-                  }
-                  className="h-5 w-5"
-                />
-
-                <span className="font-bold text-white">
-                  Event öffentlich anzeigen
-                </span>
-              </label>
-
-              <div className="mt-5">
-                <InputField
-                  label="Highlight bis"
-                  type="datetime-local"
-                  value={form.highlightUntil}
-                  onChange={(value) => updateField("highlightUntil", value)}
-                  placeholder=""
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isSubmitting || isUploadingImage}
-              className="w-full rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting
-                ? isEditing
-                  ? "Änderungen werden gespeichert..."
-                  : "Event wird gespeichert..."
-                : isEditing
-                  ? "Änderungen speichern"
-                  : "Event speichern"}
-            </button>
-          </form>
-        </section>
-
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
+      <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
+        <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
           <div>
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Übersicht
+              Datenbank
             </p>
 
-            <h2 className="mt-2 text-3xl font-black">
-              Events aus der Datenbank
-            </h2>
+            <h2 className="mt-2 text-3xl font-black">Eventliste</h2>
 
-            <p className="mt-3 text-slate-400">
-              Suche, filtere und verwalte regionale Veranstaltungen.
+            <p className="mt-2 text-sm text-slate-400">
+              Kompakt, filterbar und für viele Events geeignet.
             </p>
           </div>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_12rem_12rem]">
-            <InputField
-              label="Events suchen"
-              value={eventSearchQuery}
-              onChange={setEventSearchQuery}
-              placeholder="Titel, Ort, Kategorie, Veranstalter..."
-            />
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Filter zurücksetzen
+            </button>
+          )}
+        </div>
 
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+          <InputField
+            label="Suche"
+            value={eventSearchQuery}
+            onChange={setEventSearchQuery}
+            placeholder="Event suchen: Titel, Ort, Kategorie, Veranstalter..."
+          />
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <PlanFilterSelect
               label="Paket"
               value={selectedPlanFilter}
@@ -768,200 +673,672 @@ export default function AdminEventsPage() {
               value={selectedStatusFilter}
               onChange={setSelectedStatusFilter}
             />
-          </div>
 
-          <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5 text-sm text-slate-300">
+            <CategoryFilterSelect
+              label="Kategorie"
+              value={selectedCategoryFilter}
+              onChange={setSelectedCategoryFilter}
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-300 md:flex-row md:items-center">
+          <p>
             <span className="font-black text-white">
               {filteredEvents.length}
             </span>{" "}
             von <span className="font-black text-white">{events.length}</span>{" "}
-            Events werden angezeigt.
+            Events gefunden.
+          </p>
+
+          <p className="text-slate-500">
+            Seite {safeCurrentPage} von {pageCount} · {eventsPerPage} pro Seite
+          </p>
+        </div>
+
+        {isLoading && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Events werden geladen...
           </div>
+        )}
 
-          {isLoading && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Events werden geladen...
-            </div>
-          )}
+        {!isLoading && events.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Noch keine Events in der Datenbank gespeichert.
+          </div>
+        )}
 
-          {!isLoading && events.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Noch keine Events in der Datenbank gespeichert.
-            </div>
-          )}
+        {!isLoading && events.length > 0 && filteredEvents.length === 0 && (
+          <div className="mt-5 rounded-2xl border border-white/10 bg-slate-950/50 p-5 text-slate-300">
+            Kein Event passt zu deinem Filter.
+          </div>
+        )}
 
-          {!isLoading && events.length > 0 && filteredEvents.length === 0 && (
-            <div className="mt-8 rounded-3xl border border-white/10 bg-slate-950/60 p-5 text-slate-300">
-              Kein Event passt zu deinem Filter.
-            </div>
-          )}
+        {!isLoading && paginatedEvents.length > 0 && (
+          <div className="mt-5 overflow-hidden rounded-2xl border border-white/10">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+                <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-black uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Event</th>
+                    <th className="px-4 py-3">Datum</th>
+                    <th className="px-4 py-3">Ort</th>
+                    <th className="px-4 py-3">Paket</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Aktionen</th>
+                  </tr>
+                </thead>
 
-          {!isLoading && filteredEvents.length > 0 && (
-            <div className="mt-8 space-y-4">
-              {filteredEvents.map((event) => {
-                const isCurrentEvent = editingEventId === event.id;
-                const hasImage = eventHasImage(event);
+                <tbody>
+                  {paginatedEvents.map((event) => {
+                    const hasImage = eventHasImage(event);
+                    const isHighlighted = isHighlightedEvent(event);
 
-                return (
-                  <article
-                    key={event.id}
-                    className={`overflow-hidden rounded-3xl border transition ${
-                      isCurrentEvent
-                        ? "border-cyan-300/50 bg-cyan-300/10"
-                        : "border-white/10 bg-slate-950/60 hover:border-cyan-300/30 hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <div className="relative h-44 overflow-hidden">
-                      {hasImage ? (
-                        <img
-                          src={event.imageUrl}
-                          alt={event.title}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-full w-full bg-gradient-to-br from-cyan-400/25 via-blue-500/20 to-slate-950" />
-                      )}
-
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-transparent" />
-
-                      <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
-                        <span className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-xs font-black text-cyan-100 backdrop-blur">
-                          {event.category}
-                        </span>
-
-                        <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-xs font-black text-slate-200 backdrop-blur">
-                          {event.city}
-                        </span>
-
-                        <span
-                          className={`rounded-full border px-3 py-1 text-xs font-black backdrop-blur ${getPlanBadgeClassName(
-                            event.plan
-                          )}`}
-                        >
-                          {getEventPlanLabel(event.plan)}
-                        </span>
-
-                        {!event.isActive && (
-                          <span className="rounded-full border border-red-400/30 bg-red-400/10 px-3 py-1 text-xs font-black text-red-200 backdrop-blur">
-                            Inaktiv
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="p-5">
-                      <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                        <div className="flex-1">
-                          <p className="text-sm font-black text-cyan-200">
-                            {formatDateTime(event.startsAt)}
-                          </p>
-
-                          <h3 className="mt-2 text-2xl font-black tracking-tight">
+                    return (
+                      <tr
+                        key={event.id}
+                        className="border-b border-white/10 bg-slate-950/35 transition last:border-b-0 hover:bg-white/[0.04]"
+                      >
+                        <td className="max-w-[30rem] px-4 py-4">
+                          <button
+                            type="button"
+                            onClick={() => openDetailsDrawer(event)}
+                            className="block max-w-full truncate text-left text-base font-black text-white transition hover:text-cyan-100"
+                          >
                             {event.title}
-                          </h3>
-
-                          <p className="mt-1 text-sm font-semibold text-slate-400">
-                            {event.organizerName}
-                          </p>
-
-                          <p className="mt-3 text-xs text-slate-500">
-                            {getEventPlanDescription(event.plan)} —{" "}
-                            {getEventPlanPrice(event.plan)}
-                          </p>
-
-                          <p className="mt-4 text-slate-300">
-                            {event.description}
-                          </p>
-
-                          <div className="mt-5 grid gap-3 md:grid-cols-2">
-                            <InfoBox
-                              title="Location"
-                              value={event.locationName || "Nicht angegeben"}
-                            />
-
-                            <InfoBox
-                              title="Adresse"
-                              value={event.address || "Nicht angegeben"}
-                            />
-                          </div>
-
-                          <div className="mt-5 flex flex-wrap gap-3">
-                            {event.website && (
-                              <a
-                                href={event.website}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
-                              >
-                                Website öffnen
-                              </a>
-                            )}
-
-                            {event.ticketUrl && (
-                              <a
-                                href={event.ticketUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
-                              >
-                                Tickets öffnen
-                              </a>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-row gap-3 md:flex-col">
-                          <button
-                            type="button"
-                            onClick={() => startEditingEvent(event)}
-                            className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
-                          >
-                            Bearbeiten
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() => deleteEvent(event.id, event.title)}
-                            disabled={deletingEventId === event.id}
-                            className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {event.organizerName} · {event.category}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4 text-slate-300">
+                          <p>{formatDateTime(event.startsAt)}</p>
+
+                          {event.endsAt && (
+                            <p className="mt-1 text-xs text-slate-500">
+                              Bis {formatDateTime(event.endsAt)}
+                            </p>
+                          )}
+                        </td>
+
+                        <td className="max-w-[16rem] px-4 py-4 text-slate-300">
+                          <p className="truncate">{event.city}</p>
+
+                          <p className="mt-1 truncate text-xs text-slate-500">
+                            {event.locationName || "Keine Location"}
+                          </p>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${getPlanBadgeClassName(
+                              event.plan
+                            )}`}
                           >
-                            {deletingEventId === event.id
-                              ? "Löscht..."
-                              : "Löschen"}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+                            {getEventPlanLabel(event.plan)}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex flex-wrap gap-1">
+                            <span
+                              className={`rounded-full border px-3 py-1 text-xs font-black ${getEventStatusClassName(
+                                event.isActive
+                              )}`}
+                            >
+                              {event.isActive ? "Aktiv" : "Inaktiv"}
+                            </span>
+
+                            {hasImage && <TinyDot label="Bild" />}
+                            {isHighlighted && <TinyDot label="Highlight" />}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-4">
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openDetailsDrawer(event)}
+                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                            >
+                              Details
+                            </button>
+
+                            <Link
+                              href={`/events/${event.id}`}
+                              className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                            >
+                              Öffnen
+                            </Link>
+
+                            <button
+                              type="button"
+                              onClick={() => openEditDrawer(event)}
+                              className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </section>
-      </div>
+          </div>
+        )}
+
+        {!isLoading && filteredEvents.length > eventsPerPage && (
+          <div className="mt-5 flex flex-col justify-between gap-3 rounded-2xl border border-white/10 bg-slate-950/50 p-4 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              disabled={safeCurrentPage <= 1}
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Zurück
+            </button>
+
+            <p className="text-center text-sm text-slate-400">
+              Seite{" "}
+              <span className="font-black text-white">{safeCurrentPage}</span>{" "}
+              von <span className="font-black text-white">{pageCount}</span>
+            </p>
+
+            <button
+              type="button"
+              disabled={safeCurrentPage >= pageCount}
+              onClick={() =>
+                setCurrentPage((page) => Math.min(pageCount, page + 1))
+              }
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Weiter
+            </button>
+          </div>
+        )}
+      </section>
+
+      <EventDrawer
+        mode={drawerMode}
+        event={selectedEvent}
+        form={form}
+        isEditing={isEditing}
+        isSubmitting={isSubmitting}
+        isUploadingImage={isUploadingImage}
+        deletingEventId={deletingEventId}
+        onClose={closeDrawer}
+        onSubmit={handleSubmit}
+        onUpdateField={updateField}
+        onUploadImage={uploadEventImage}
+        onRemoveImage={removeEventImage}
+        onEditEvent={openEditDrawer}
+        onDeleteEvent={deleteEvent}
+      />
     </section>
   );
 }
 
-function AdminStatCard({
-  title,
-  value,
-  description,
+function EventDrawer({
+  mode,
+  event,
+  form,
+  isEditing,
+  isSubmitting,
+  isUploadingImage,
+  deletingEventId,
+  onClose,
+  onSubmit,
+  onUpdateField,
+  onUploadImage,
+  onRemoveImage,
+  onEditEvent,
+  onDeleteEvent,
 }: {
-  title: string;
-  value: string;
-  description: string;
+  mode: DrawerMode;
+  event: LocarioEvent | null;
+  form: EventForm;
+  isEditing: boolean;
+  isSubmitting: boolean;
+  isUploadingImage: boolean;
+  deletingEventId: string | null;
+  onClose: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onUpdateField: (field: keyof EventForm, value: string | boolean) => void;
+  onUploadImage: (event: ChangeEvent<HTMLInputElement>) => void;
+  onRemoveImage: () => void;
+  onEditEvent: (event: LocarioEvent) => void;
+  onDeleteEvent: (id: string, title: string) => void;
 }) {
+  if (mode === "closed") {
+    return null;
+  }
+
+  const isFormMode = mode === "create" || mode === "edit";
+
   return (
-    <article className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20">
-      <p className="text-sm font-black uppercase tracking-wide text-slate-400">
+    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm">
+      <div className="flex min-h-screen justify-end">
+        <aside className="h-screen w-full max-w-5xl overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl shadow-slate-950/50 md:p-8">
+          <div className="flex flex-col justify-between gap-4 border-b border-white/10 pb-6 md:flex-row md:items-start">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+                {isFormMode ? "Bearbeitung" : "Eventdetails"}
+              </p>
+
+              <h2 className="mt-2 text-4xl font-black tracking-tight">
+                {mode === "create"
+                  ? "Neues Event erfassen"
+                  : mode === "edit"
+                    ? "Event bearbeiten"
+                    : event?.title || "Event"}
+              </h2>
+
+              <p className="mt-3 max-w-2xl text-slate-400">
+                {isFormMode
+                  ? "Erfasse oder bearbeite Eventdaten getrennt von der Tabelle."
+                  : "Details, Sichtbarkeit, Paket, Links und Aktionen zu diesem Event."}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Schliessen
+            </button>
+          </div>
+
+          {isFormMode && (
+            <form onSubmit={onSubmit} className="mt-8 grid gap-6 xl:grid-cols-3">
+              <div className="space-y-5">
+                <InputField
+                  label="Eventtitel"
+                  value={form.title}
+                  onChange={(value) => onUpdateField("title", value)}
+                  placeholder="Zum Beispiel: Sommerfest Wattenwil"
+                  required
+                />
+
+                <InputField
+                  label="Veranstalter"
+                  value={form.organizerName}
+                  onChange={(value) => onUpdateField("organizerName", value)}
+                  placeholder="Zum Beispiel: Musikverein Wattenwil"
+                  required
+                />
+
+                <SelectField
+                  label="Kategorie"
+                  value={form.category}
+                  onChange={(value) => onUpdateField("category", value)}
+                  placeholder="Kategorie auswählen"
+                  options={eventCategories}
+                  required
+                />
+
+                <EventPlanSelect
+                  label="Wochenpaket"
+                  value={form.plan}
+                  onChange={(value) => onUpdateField("plan", value)}
+                />
+
+                <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+                  <p className="font-black text-cyan-100">
+                    {getEventPlanLabel(form.plan)}
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-300">
+                    {getEventPlanDescription(form.plan)}
+                  </p>
+
+                  <p className="mt-2 text-sm font-black text-cyan-100">
+                    {getEventPlanPrice(form.plan)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <ImageUploadField
+                  imageUrl={form.imageUrl}
+                  isUploading={isUploadingImage}
+                  onUpload={onUploadImage}
+                  onRemove={onRemoveImage}
+                />
+
+                <InputField
+                  label="Stadt / Region"
+                  value={form.city}
+                  onChange={(value) => onUpdateField("city", value)}
+                  placeholder="Zum Beispiel: Bern"
+                  required
+                />
+
+                <InputField
+                  label="Ort / Location"
+                  value={form.locationName}
+                  onChange={(value) => onUpdateField("locationName", value)}
+                  placeholder="Zum Beispiel: Dorfplatz"
+                />
+
+                <InputField
+                  label="Adresse"
+                  value={form.address}
+                  onChange={(value) => onUpdateField("address", value)}
+                  placeholder="Strasse, Hausnummer"
+                />
+              </div>
+
+              <div className="space-y-5">
+                <TextareaField
+                  label="Beschreibung"
+                  value={form.description}
+                  onChange={(value) => onUpdateField("description", value)}
+                  placeholder="Beschreibe das Event kurz und ansprechend."
+                  rows={5}
+                  required
+                />
+
+                <InputField
+                  label="Startdatum / Startzeit"
+                  type="datetime-local"
+                  value={form.startsAt}
+                  onChange={(value) => onUpdateField("startsAt", value)}
+                  placeholder=""
+                  required
+                />
+
+                <InputField
+                  label="Enddatum / Endzeit"
+                  type="datetime-local"
+                  value={form.endsAt}
+                  onChange={(value) => onUpdateField("endsAt", value)}
+                  placeholder=""
+                />
+
+                <InputField
+                  label="Website"
+                  value={form.website}
+                  onChange={(value) => onUpdateField("website", value)}
+                  placeholder="https://www.event.ch"
+                />
+
+                <InputField
+                  label="Ticketlink"
+                  value={form.ticketUrl}
+                  onChange={(value) => onUpdateField("ticketUrl", value)}
+                  placeholder="https://tickets.example.ch"
+                />
+
+                <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-lg font-black text-cyan-100">
+                    Sichtbarkeit
+                  </p>
+
+                  <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+                    <input
+                      type="checkbox"
+                      checked={form.isActive}
+                      onChange={(checkboxEvent) =>
+                        onUpdateField("isActive", checkboxEvent.target.checked)
+                      }
+                      className="h-5 w-5"
+                    />
+
+                    <span className="font-bold text-white">
+                      Event öffentlich anzeigen
+                    </span>
+                  </label>
+
+                  <div className="mt-4">
+                    <InputField
+                      label="Highlight bis"
+                      type="datetime-local"
+                      value={form.highlightUntil}
+                      onChange={(value) => onUpdateField("highlightUntil", value)}
+                      placeholder=""
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting || isUploadingImage}
+                  className="w-full rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting
+                    ? isEditing
+                      ? "Änderungen werden gespeichert..."
+                      : "Event wird gespeichert..."
+                    : isEditing
+                      ? "Änderungen speichern"
+                      : "Event speichern"}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {mode === "details" && event && (
+            <EventDetailsDrawer
+              event={event}
+              deletingEventId={deletingEventId}
+              onEditEvent={onEditEvent}
+              onDeleteEvent={onDeleteEvent}
+            />
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function EventDetailsDrawer({
+  event,
+  deletingEventId,
+  onEditEvent,
+  onDeleteEvent,
+}: {
+  event: LocarioEvent;
+  deletingEventId: string | null;
+  onEditEvent: (event: LocarioEvent) => void;
+  onDeleteEvent: (id: string, title: string) => void;
+}) {
+  const hasImage = eventHasImage(event);
+  const isHighlighted = isHighlightedEvent(event);
+
+  return (
+    <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
+      <div className="space-y-5">
+        <div className="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60">
+          {hasImage ? (
+            <img
+              src={event.imageUrl}
+              alt={event.title}
+              className="h-52 w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-44 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
+              Kein Bild
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Aktionen
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            <button
+              type="button"
+              onClick={() => onEditEvent(event)}
+              className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+            >
+              Bearbeiten
+            </button>
+
+            <Link
+              href={`/events/${event.id}`}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+            >
+              Öffentlich öffnen
+            </Link>
+
+            {event.website && (
+              <a
+                href={event.website}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              >
+                Website öffnen
+              </a>
+            )}
+
+            {event.ticketUrl && (
+              <a
+                href={event.ticketUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-center text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
+              >
+                Tickets öffnen
+              </a>
+            )}
+
+            <button
+              type="button"
+              onClick={() => onDeleteEvent(event.id, event.title)}
+              disabled={deletingEventId === event.id}
+              className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deletingEventId === event.id ? "Löscht..." : "Event löschen"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-black ${getPlanBadgeClassName(
+              event.plan
+            )}`}
+          >
+            {getEventPlanLabel(event.plan)}
+          </span>
+
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-black ${getEventStatusClassName(
+              event.isActive
+            )}`}
+          >
+            {event.isActive ? "Aktiv" : "Inaktiv"}
+          </span>
+
+          {hasImage && <MiniBadge label="Bild" />}
+          {isHighlighted && <MiniBadge label="Highlight" variant="emerald" />}
+        </div>
+
+        <h3 className="break-words text-4xl font-black">{event.title}</h3>
+
+        <p className="text-slate-400">
+          {event.organizerName} · {event.category}
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <DetailBox title="Start" value={formatDateTime(event.startsAt)} />
+          <DetailBox title="Ende" value={formatDateTime(event.endsAt)} />
+          <DetailBox title="Stadt" value={event.city} />
+          <DetailBox
+            title="Location"
+            value={event.locationName || "Nicht angegeben"}
+          />
+          <DetailBox title="Adresse" value={event.address || "Nicht angegeben"} />
+          <DetailBox
+            title="Paket"
+            value={`${getEventPlanDescription(event.plan)} · ${getEventPlanPrice(
+              event.plan
+            )}`}
+          />
+          <DetailBox
+            title="Highlight bis"
+            value={formatDateTime(event.highlightUntil)}
+          />
+          <DetailBox
+            title="Status"
+            value={event.isActive ? "Öffentlich sichtbar" : "Deaktiviert"}
+          />
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Beschreibung
+          </p>
+
+          <p className="mt-3 whitespace-pre-line text-sm leading-7 text-slate-300">
+            {event.description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CompactMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-2xl font-black text-cyan-200">{value}</p>
+    </div>
+  );
+}
+
+function TinyDot({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[0.65rem] font-black text-cyan-100">
+      {label}
+    </span>
+  );
+}
+
+function MiniBadge({
+  label,
+  variant = "cyan",
+}: {
+  label: string;
+  variant?: "cyan" | "emerald";
+}) {
+  const className =
+    variant === "emerald"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : "border-cyan-300/20 bg-cyan-300/10 text-cyan-100";
+
+  return (
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-black ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function DetailBox({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
         {title}
       </p>
 
-      <p className="mt-4 text-5xl font-black text-cyan-200">{value}</p>
-
-      <p className="mt-3 text-sm text-slate-300">{description}</p>
-    </article>
+      <p className="mt-2 break-words text-sm text-slate-300">{value}</p>
+    </div>
   );
 }
 
@@ -977,33 +1354,28 @@ function ImageUploadField({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
+    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-4">
       <label className="text-sm font-bold text-slate-200">
         Eventbild / Titelbild
       </label>
 
-      <p className="mt-2 text-sm text-slate-400">
-        Dieses Bild erscheint oben auf der Event-Kachel. Erlaubt sind JPG, PNG
-        und WebP bis 5 MB.
-      </p>
-
-      <div className="mt-5 overflow-hidden rounded-3xl border border-white/10 bg-slate-950/60">
+      <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt="Eventbild Vorschau"
-            className="h-52 w-full object-cover"
+            className="h-32 w-full object-cover"
           />
         ) : (
-          <div className="flex h-52 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
-            Noch kein Bild hochgeladen
+          <div className="flex h-28 items-center justify-center bg-gradient-to-br from-cyan-400/20 via-blue-500/20 to-slate-950 text-sm font-bold text-slate-400">
+            Kein Bild
           </div>
         )}
       </div>
 
-      <div className="mt-5 grid gap-3 sm:flex">
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5">
-          {isUploading ? "Bild wird hochgeladen..." : "Bild hochladen"}
+      <div className="mt-4 grid gap-3 sm:flex">
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-sm font-black text-slate-950 transition hover:-translate-y-0.5">
+          {isUploading ? "Lädt..." : "Bild hochladen"}
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -1018,16 +1390,12 @@ function ImageUploadField({
             type="button"
             onClick={onRemove}
             disabled={isUploading}
-            className="rounded-2xl border border-red-400/30 px-5 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-2xl border border-red-400/30 px-4 py-3 text-sm font-black text-red-300 transition hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Bild entfernen
+            Entfernen
           </button>
         )}
       </div>
-
-      {imageUrl && (
-        <p className="mt-4 break-all text-xs text-slate-500">{imageUrl}</p>
-      )}
     </div>
   );
 }
@@ -1239,15 +1607,38 @@ function StatusFilterSelect({
   );
 }
 
-function InfoBox({ title, value }: { title: string; value: string }) {
+function CategoryFilterSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-        {title}
-      </p>
+    <div>
+      <label className="text-sm font-bold text-slate-200">{label}</label>
 
-      <p className="mt-2 break-words text-sm font-bold text-white">{value}</p>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-300"
+      >
+        <option value="" className="bg-slate-950 text-slate-400">
+          Alle Kategorien
+        </option>
+
+        {eventCategories.map((category) => (
+          <option
+            key={category}
+            value={category}
+            className="bg-slate-950 text-white"
+          >
+            {category}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
-
