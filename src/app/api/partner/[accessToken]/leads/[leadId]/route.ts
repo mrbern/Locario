@@ -9,10 +9,18 @@ type RouteContext = {
 };
 
 type UpdateLeadRequestBody = {
-  status?: string;
+  status?: unknown;
 };
 
-const allowedStatuses = ["new", "in_progress", "done"];
+const allowedStatuses = ["new", "in_progress", "done"] as const;
+type LeadStatus = (typeof allowedStatuses)[number];
+
+function isAllowedLeadStatus(value: unknown): value is LeadStatus {
+  return (
+    typeof value === "string" &&
+    allowedStatuses.includes(value.trim() as LeadStatus)
+  );
+}
 
 function mapLead(lead: {
   id: string;
@@ -42,9 +50,8 @@ function mapLead(lead: {
 
 export async function PUT(request: Request, context: RouteContext) {
   const { accessToken, leadId } = await context.params;
-  const body = (await request.json()) as UpdateLeadRequestBody;
 
-  if (!accessToken) {
+  if (!accessToken?.trim()) {
     return NextResponse.json(
       {
         message: "Kein Zugangscode übergeben.",
@@ -55,7 +62,7 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
-  if (!leadId) {
+  if (!leadId?.trim()) {
     return NextResponse.json(
       {
         message: "Keine Lead-ID übergeben.",
@@ -66,7 +73,11 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
-  if (!body.status || !allowedStatuses.includes(body.status)) {
+  const body = (await request.json().catch(() => null)) as
+    | UpdateLeadRequestBody
+    | null;
+
+  if (!body || !isAllowedLeadStatus(body.status)) {
     return NextResponse.json(
       {
         message: "Ungültiger Lead-Status.",
@@ -77,9 +88,11 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
+  const status = body.status.trim() as LeadStatus;
+
   const company = await prisma.company.findUnique({
     where: {
-      accessToken,
+      accessToken: accessToken.trim(),
     },
     select: {
       id: true,
@@ -99,8 +112,11 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const existingLead = await prisma.lead.findFirst({
     where: {
-      id: leadId,
+      id: leadId.trim(),
       companyId: company.id,
+    },
+    select: {
+      id: true,
     },
   });
 
@@ -117,10 +133,10 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const updatedLead = await prisma.lead.update({
     where: {
-      id: leadId,
+      id: existingLead.id,
     },
     data: {
-      status: body.status,
+      status,
     },
   });
 

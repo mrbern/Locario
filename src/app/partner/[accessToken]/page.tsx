@@ -45,6 +45,14 @@ type PartnerProfileForm = {
   adCta: string;
 };
 
+type CompanyWithAddress = Company & {
+  address?: string | null;
+  adress?: string | null;
+  companyName?: string | null;
+  title?: string | null;
+  subCategories?: unknown;
+};
+
 const emptyPartnerProfileForm: PartnerProfileForm = {
   imageUrl: "",
   phone: "",
@@ -71,36 +79,159 @@ const leadStatusOptions = [
   },
 ];
 
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function normalizeText(value: unknown) {
+  return getSafeString(value)
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => getSafeString(item).trim()).filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => getSafeString(item).trim()).filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function uniqueValues(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueItems: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+    const normalizedValue = normalizeText(cleanValue);
+
+    if (!cleanValue || !normalizedValue || seenValues.has(normalizedValue)) {
+      return;
+    }
+
+    seenValues.add(normalizedValue);
+    uniqueItems.push(cleanValue);
+  });
+
+  return uniqueItems;
+}
+
+function getCompanyName(company: Company) {
+  const safeCompany = company as CompanyWithAddress;
+
+  return (
+    getSafeString(company.name).trim() ||
+    getSafeString(safeCompany.companyName).trim() ||
+    getSafeString(safeCompany.title).trim() ||
+    "Unbenannte Firma"
+  );
+}
+
+function getCompanyAddress(company: Company) {
+  const safeCompany = company as CompanyWithAddress;
+
+  return (
+    getSafeString(safeCompany.address).trim() ||
+    getSafeString(safeCompany.adress).trim()
+  );
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeText(value);
+  const normalizedCity = normalizeText(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getCompanyLocationLine(company: Company) {
+  const city = getSafeString(company.city).trim();
+  const address = getCompanyAddress(company);
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
 function getDisplayedSubCategories(company: Company) {
-  if (company.subCategories && company.subCategories.length > 0) {
-    return company.subCategories;
+  const safeCompany = company as CompanyWithAddress;
+  const subCategories = uniqueValues(
+    getSafeStringArray(safeCompany.subCategories)
+  );
+
+  if (subCategories.length > 0) {
+    return subCategories;
   }
 
-  if (company.subCategory) {
-    return [company.subCategory];
+  const subCategory = getSafeString(company.subCategory).trim();
+  const category = getSafeString(company.category).trim();
+
+  if (subCategory) {
+    return [subCategory];
   }
 
-  if (company.category) {
-    return [company.category];
+  if (category) {
+    return [category];
   }
 
   return [];
 }
 
 function getDisplayedMainCategory(company: Company) {
-  return company.mainCategory || "Allgemein";
+  return getSafeString(company.mainCategory, "Allgemein") || "Allgemein";
 }
 
 function createProfileForm(company: Company): PartnerProfileForm {
   return {
-    imageUrl: company.imageUrl || "",
-    phone: company.phone || "",
-    email: company.email || "",
-    website: company.website || "",
-    description: company.description || "",
-    adTitle: company.ad?.title || "",
-    adDescription: company.ad?.description || "",
-    adCta: company.ad?.cta || "",
+    imageUrl: getSafeString(company.imageUrl),
+    phone: getSafeString(company.phone),
+    email: getSafeString(company.email),
+    website: getSafeString(company.website),
+    description: getSafeString(company.description),
+    adTitle: getSafeString(company.ad?.title),
+    adDescription: getSafeString(company.ad?.description),
+    adCta: getSafeString(company.ad?.cta),
   };
 }
 
@@ -153,20 +284,52 @@ function getPlanBadgeClassName(plan: string | undefined) {
 }
 
 function getLeadSearchText(lead: PartnerLead) {
-  return [
-    lead.customerName,
-    lead.customerEmail,
-    lead.customerPhone,
-    lead.message,
-    lead.sourceQuery,
-    lead.status,
-  ]
-    .join(" ")
-    .toLowerCase();
+  return normalizeText(
+    [
+      lead.customerName,
+      lead.customerEmail,
+      lead.customerPhone,
+      lead.message,
+      lead.sourceQuery,
+      getStatusLabel(lead.status),
+      lead.status,
+    ].join(" ")
+  );
 }
 
 function companyHasImage(company: Company) {
-  return Boolean(company.imageUrl && company.imageUrl.trim());
+  return Boolean(getSafeString(company.imageUrl).trim());
+}
+
+function getWebsiteHref(value: unknown) {
+  const website = getSafeString(value).trim();
+
+  if (!website) {
+    return "";
+  }
+
+  if (website.startsWith("http://") || website.startsWith("https://")) {
+    return website;
+  }
+
+  return `https://${website}`;
+}
+
+function formatDateTime(dateValue: string | null | undefined) {
+  const dateString = getSafeString(dateValue).trim();
+  const date = new Date(dateString);
+
+  if (!dateString || Number.isNaN(date.getTime())) {
+    return "Nicht angegeben";
+  }
+
+  return date.toLocaleString("de-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function PartnerDashboardPage({
@@ -212,13 +375,22 @@ export default function PartnerDashboardPage({
   }, [leads]);
 
   const leadsWithSourceQuery = useMemo(() => {
-    return leads.filter((lead) => lead.sourceQuery);
+    return leads.filter((lead) => getSafeString(lead.sourceQuery).trim());
+  }, [leads]);
+
+  const sortedLeads = useMemo(() => {
+    return [...leads].sort((firstLead, secondLead) => {
+      return (
+        new Date(secondLead.createdAt).getTime() -
+        new Date(firstLead.createdAt).getTime()
+      );
+    });
   }, [leads]);
 
   const filteredLeads = useMemo(() => {
-    const normalizedSearchQuery = leadSearchQuery.trim().toLowerCase();
+    const normalizedSearchQuery = normalizeText(leadSearchQuery);
 
-    return leads.filter((lead) => {
+    return sortedLeads.filter((lead) => {
       const matchesSearch =
         !normalizedSearchQuery ||
         getLeadSearchText(lead).includes(normalizedSearchQuery);
@@ -228,9 +400,9 @@ export default function PartnerDashboardPage({
 
       return matchesSearch && matchesStatus;
     });
-  }, [leads, leadSearchQuery, selectedLeadStatus]);
+  }, [sortedLeads, leadSearchQuery, selectedLeadStatus]);
 
-  const hasActiveLeadFilters = leadSearchQuery || selectedLeadStatus;
+  const hasActiveLeadFilters = Boolean(leadSearchQuery || selectedLeadStatus);
 
   async function loadPartnerDashboard() {
     try {
@@ -362,16 +534,16 @@ export default function PartnerDashboardPage({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          imageUrl: profileForm.imageUrl,
-          phone: profileForm.phone,
-          email: profileForm.email,
-          website: profileForm.website,
-          description: profileForm.description,
+          imageUrl: profileForm.imageUrl.trim(),
+          phone: profileForm.phone.trim(),
+          email: profileForm.email.trim(),
+          website: profileForm.website.trim(),
+          description: profileForm.description.trim(),
           ad: hasAd
             ? {
-                title: profileForm.adTitle,
-                description: profileForm.adDescription,
-                cta: profileForm.adCta,
+                title: profileForm.adTitle.trim(),
+                description: profileForm.adDescription.trim(),
+                cta: profileForm.adCta.trim(),
               }
             : undefined,
         }),
@@ -466,19 +638,9 @@ export default function PartnerDashboardPage({
     setSelectedLeadStatus("");
   }
 
-  function formatDate(dateValue: string) {
-    return new Date(dateValue).toLocaleString("de-CH", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   if (isLoading) {
     return (
-      <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+      <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
         <BackgroundGlow />
 
         <section className="relative mx-auto max-w-6xl">
@@ -495,7 +657,7 @@ export default function PartnerDashboardPage({
 
   if (!company) {
     return (
-      <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+      <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
         <BackgroundGlow />
 
         <section className="relative mx-auto max-w-4xl">
@@ -530,32 +692,36 @@ export default function PartnerDashboardPage({
     );
   }
 
+  const companyName = getCompanyName(company);
+  const companyLocationLine = getCompanyLocationLine(company);
+  const companyAddress = getCompanyAddress(company);
   const displayedMainCategory = getDisplayedMainCategory(company);
   const displayedSubCategories = getDisplayedSubCategories(company);
   const advertisingAllowed = canCompanyUseAdvertising(company.plan);
   const planLabel = getCompanyPlanLabel(company.plan);
   const planDescription = getCompanyPlanDescription(company.plan);
   const hasImage = companyHasImage(company);
+  const publicWebsiteHref = getWebsiteHref(company.website);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
       <BackgroundGlow />
 
       <section className="relative mx-auto max-w-7xl">
         <div className="grid gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
-          <div>
+          <div className="min-w-0">
             <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
               Locario Partner-Dashboard
             </div>
 
-            <h1 className="mt-6 max-w-5xl text-5xl font-black tracking-tight md:text-7xl">
-              {company.name}
+            <h1 className="mt-6 max-w-5xl break-words text-5xl font-black tracking-tight md:text-7xl">
+              {companyName}
             </h1>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <span className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">
-                {company.city}
+              <span className="max-w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">
+                📍 {companyLocationLine}
               </span>
 
               <span
@@ -667,7 +833,7 @@ export default function PartnerDashboardPage({
               {hasImage ? (
                 <img
                   src={company.imageUrl}
-                  alt={company.name}
+                  alt={companyName}
                   className="h-64 w-full object-cover"
                 />
               ) : (
@@ -678,9 +844,9 @@ export default function PartnerDashboardPage({
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {displayedSubCategories.map((subCategory) => (
+              {displayedSubCategories.map((subCategory, subCategoryIndex) => (
                 <span
-                  key={subCategory}
+                  key={`${normalizeText(subCategory)}-${subCategoryIndex}`}
                   className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100"
                 >
                   {subCategory}
@@ -693,10 +859,19 @@ export default function PartnerDashboardPage({
                 Beschreibung
               </p>
 
-              <p className="mt-3 text-slate-200">{company.description}</p>
+              <p className="mt-3 whitespace-pre-line break-words text-slate-200">
+                {company.description}
+              </p>
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <InfoBox title="Ort" value={company.city || "Nicht angegeben"} />
+
+              <InfoBox
+                title="Adresse"
+                value={companyAddress || "Nicht angegeben"}
+              />
+
               <InfoBox
                 title="Telefon"
                 value={company.phone || "Nicht angegeben"}
@@ -706,12 +881,27 @@ export default function PartnerDashboardPage({
                 title="E-Mail"
                 value={company.email || "Nicht angegeben"}
               />
+            </div>
 
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
               <InfoBox
                 title="Website"
                 value={company.website || "Nicht angegeben"}
               />
+
+              <InfoBox title="Paket" value={planLabel} />
             </div>
+
+            {publicWebsiteHref && (
+              <a
+                href={publicWebsiteHref}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-4 inline-flex rounded-2xl border border-white/15 px-4 py-3 text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+              >
+                Website öffnen
+              </a>
+            )}
 
             {advertisingAllowed && company.ad && (
               <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
@@ -719,9 +909,13 @@ export default function PartnerDashboardPage({
                   Aktive Werbung
                 </p>
 
-                <h3 className="mt-3 text-2xl font-black">{company.ad.title}</h3>
+                <h3 className="mt-3 break-words text-2xl font-black">
+                  {company.ad.title}
+                </h3>
 
-                <p className="mt-2 text-slate-300">{company.ad.description}</p>
+                <p className="mt-2 whitespace-pre-line break-words text-slate-300">
+                  {company.ad.description}
+                </p>
 
                 <p className="mt-4 text-sm font-black text-cyan-100">
                   Button: {company.ad.cta}
@@ -758,8 +952,8 @@ export default function PartnerDashboardPage({
 
             <p className="mt-3 text-slate-400">
               Kontaktdaten, Beschreibung, Titelbild und Werbung kannst du selbst
-              bearbeiten. Name, Ort, Kategorien und Paket werden aktuell von
-              Locario verwaltet.
+              bearbeiten. Name, Ort, Adresse, Kategorien und Paket werden aktuell
+              von Locario verwaltet.
             </p>
 
             {profileSuccessMessage && (
@@ -976,117 +1170,125 @@ export default function PartnerDashboardPage({
 
           {filteredLeads.length > 0 && (
             <div className="mt-8 grid gap-6 xl:grid-cols-2">
-              {filteredLeads.map((lead) => (
-                <article
-                  key={lead.id}
-                  className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-xl shadow-slate-950/20"
-                >
-                  <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
-                    <div>
-                      <h3 className="text-2xl font-black tracking-tight">
-                        {lead.customerName}
-                      </h3>
+              {filteredLeads.map((lead) => {
+                const leadEmail = getSafeString(lead.customerEmail).trim();
+                const leadPhone = getSafeString(lead.customerPhone).trim();
+                const leadSourceQuery = getSafeString(lead.sourceQuery).trim();
 
-                      <p className="mt-2 text-sm text-slate-400">
-                        {formatDate(lead.createdAt)}
-                      </p>
-                    </div>
+                return (
+                  <article
+                    key={lead.id}
+                    className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-xl shadow-slate-950/20"
+                  >
+                    <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-2xl font-black tracking-tight">
+                          {lead.customerName}
+                        </h3>
 
-                    <span
-                      className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClassName(
-                        lead.status
-                      )}`}
-                    >
-                      {getStatusLabel(lead.status)}
-                    </span>
-                  </div>
+                        <p className="mt-2 text-sm text-slate-400">
+                          {formatDateTime(lead.createdAt)}
+                        </p>
+                      </div>
 
-                  <div className="mt-6 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-                    <InfoLine
-                      label="E-Mail"
-                      value={lead.customerEmail || "Nicht angegeben"}
-                    />
-
-                    <InfoLine
-                      label="Telefon"
-                      value={lead.customerPhone || "Nicht angegeben"}
-                    />
-                  </div>
-
-                  {lead.sourceQuery && (
-                    <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                      <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
-                        Quelle / Suche
-                      </p>
-
-                      <p className="mt-2 text-slate-200">
-                        {lead.sourceQuery}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                      Nachricht
-                    </p>
-
-                    <p className="mt-2 text-slate-200">{lead.message}</p>
-                  </div>
-
-                  <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-                    {lead.customerEmail && (
-                      <a
-                        href={`mailto:${lead.customerEmail}`}
-                        className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-200"
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-black ${getStatusClassName(
+                          lead.status
+                        )}`}
                       >
-                        E-Mail senden
-                      </a>
+                        {getStatusLabel(lead.status)}
+                      </span>
+                    </div>
+
+                    <div className="mt-6 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+                      <InfoLine
+                        label="E-Mail"
+                        value={leadEmail || "Nicht angegeben"}
+                      />
+
+                      <InfoLine
+                        label="Telefon"
+                        value={leadPhone || "Nicht angegeben"}
+                      />
+                    </div>
+
+                    {leadSourceQuery && (
+                      <div className="mt-6 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+                        <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+                          Quelle / Suche
+                        </p>
+
+                        <p className="mt-2 break-words text-slate-200">
+                          {leadSourceQuery}
+                        </p>
+                      </div>
                     )}
 
-                    {lead.customerPhone && (
-                      <a
-                        href={`tel:${lead.customerPhone}`}
-                        className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
-                      >
-                        Anrufen
-                      </a>
-                    )}
-                  </div>
+                    <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                        Nachricht
+                      </p>
 
-                  <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-                      Status bearbeiten
-                    </p>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      {leadStatusOptions.map((statusOption) => {
-                        const isActive = lead.status === statusOption.value;
-                        const isUpdating = updatingLeadId === lead.id;
-
-                        return (
-                          <button
-                            key={statusOption.value}
-                            type="button"
-                            disabled={isActive || isUpdating}
-                            onClick={() =>
-                              updateLeadStatus(lead.id, statusOption.value)
-                            }
-                            className={`rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                              isActive
-                                ? "bg-cyan-300 text-slate-950"
-                                : "border border-white/15 text-white hover:border-cyan-300/30 hover:bg-white/10"
-                            }`}
-                          >
-                            {isUpdating && !isActive
-                              ? "Speichert..."
-                              : statusOption.label}
-                          </button>
-                        );
-                      })}
+                      <p className="mt-2 whitespace-pre-line break-words text-slate-200">
+                        {lead.message}
+                      </p>
                     </div>
-                  </div>
-                </article>
-              ))}
+
+                    <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                      {leadEmail && (
+                        <a
+                          href={`mailto:${leadEmail}`}
+                          className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-slate-200"
+                        >
+                          E-Mail senden
+                        </a>
+                      )}
+
+                      {leadPhone && (
+                        <a
+                          href={`tel:${leadPhone}`}
+                          className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+                        >
+                          Anrufen
+                        </a>
+                      )}
+                    </div>
+
+                    <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+                      <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+                        Status bearbeiten
+                      </p>
+
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {leadStatusOptions.map((statusOption) => {
+                          const isActive = lead.status === statusOption.value;
+                          const isUpdating = updatingLeadId === lead.id;
+
+                          return (
+                            <button
+                              key={statusOption.value}
+                              type="button"
+                              disabled={isActive || isUpdating}
+                              onClick={() =>
+                                updateLeadStatus(lead.id, statusOption.value)
+                              }
+                              className={`rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                isActive
+                                  ? "bg-cyan-300 text-slate-950"
+                                  : "border border-white/15 text-white hover:border-cyan-300/30 hover:bg-white/10"
+                              }`}
+                            >
+                              {isUpdating && !isActive
+                                ? "Speichert..."
+                                : statusOption.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
@@ -1230,7 +1432,7 @@ function InfoBox({ title, value }: { title: string; value: string }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <p>
+    <p className="break-words">
       <span className="text-slate-500">{label}:</span>{" "}
       <span className="text-slate-200">{value}</span>
     </p>
@@ -1329,6 +1531,3 @@ function SelectField({
     </div>
   );
 }
-
-
-

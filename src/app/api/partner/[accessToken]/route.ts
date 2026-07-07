@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { canCompanyUseAdvertising } from "@/data/plans";
 import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
@@ -20,22 +21,45 @@ type PartnerProfileRequestBody = {
   };
 };
 
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) {
     return [];
   }
 
-  try {
-    const parsed = JSON.parse(value);
+  const trimmedValue = value.trim();
 
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item) => typeof item === "string");
-    }
-
-    return [];
-  } catch {
+  if (!trimmedValue) {
     return [];
   }
+
+  try {
+    const parsed = JSON.parse(trimmedValue);
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => getSafeString(item).trim())
+        .filter(Boolean);
+    }
+  } catch {
+    // Fallback unten verwenden.
+  }
+
+  return trimmedValue
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function mapPartnerDashboard(company: {
@@ -49,12 +73,17 @@ function mapPartnerDashboard(company: {
   subCategories: string;
   category: string;
   city: string;
+  adress: string | null;
+  latitude: number | null;
+  longitude: number | null;
   phone: string | null;
   email: string | null;
   website: string | null;
   description: string;
   tags: string;
   searchTerms: string;
+  createdAt: Date;
+  updatedAt: Date;
   ad: {
     title: string;
     description: string;
@@ -73,6 +102,8 @@ function mapPartnerDashboard(company: {
     updatedAt: Date;
   }[];
 }) {
+  const address = company.adress ?? "";
+
   return {
     company: {
       id: company.id,
@@ -85,19 +116,25 @@ function mapPartnerDashboard(company: {
       subCategories: parseJsonArray(company.subCategories),
       category: company.category,
       city: company.city,
+      address,
+      adress: address,
+      latitude: company.latitude,
+      longitude: company.longitude,
       phone: company.phone ?? "",
       email: company.email ?? "",
       website: company.website ?? "",
       description: company.description,
       tags: parseJsonArray(company.tags),
       searchTerms: parseJsonArray(company.searchTerms),
+      createdAt: company.createdAt.toISOString(),
+      updatedAt: company.updatedAt.toISOString(),
       ad: company.ad
         ? {
             title: company.ad.title,
             description: company.ad.description,
             cta: company.ad.cta,
           }
-        : undefined,
+        : null,
     },
     leads: company.leads.map((lead) => ({
       id: lead.id,
@@ -180,6 +217,7 @@ export async function PUT(request: Request, context: RouteContext) {
     },
     select: {
       id: true,
+      plan: true,
     },
   });
 
@@ -207,10 +245,24 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
-  const hasAd =
+  const hasAd = Boolean(
     body.ad?.title?.trim() ||
-    body.ad?.description?.trim() ||
-    body.ad?.cta?.trim();
+      body.ad?.description?.trim() ||
+      body.ad?.cta?.trim()
+  );
+
+  const advertisingAllowed = canCompanyUseAdvertising(existingCompany.plan);
+
+  if (hasAd && !advertisingAllowed) {
+    return NextResponse.json(
+      {
+        message: "Werbeanzeigen sind in diesem Paket nicht verfügbar.",
+      },
+      {
+        status: 403,
+      }
+    );
+  }
 
   await prisma.company.update({
     where: {
@@ -219,14 +271,15 @@ export async function PUT(request: Request, context: RouteContext) {
     data: {
       imageUrl:
         body.imageUrl !== undefined ? body.imageUrl.trim() || null : undefined,
-      phone: body.phone?.trim() || null,
-      email: body.email?.trim() || null,
-      website: body.website?.trim() || null,
+      phone: body.phone !== undefined ? body.phone.trim() || null : undefined,
+      email: body.email !== undefined ? body.email.trim() || null : undefined,
+      website:
+        body.website !== undefined ? body.website.trim() || null : undefined,
       description: body.description.trim(),
     },
   });
 
-  if (hasAd) {
+  if (advertisingAllowed && hasAd) {
     await prisma.advertisement.upsert({
       where: {
         companyId: existingCompany.id,
