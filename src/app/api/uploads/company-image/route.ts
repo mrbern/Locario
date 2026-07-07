@@ -1,13 +1,17 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
+import { UTApi } from "uploadthing/server";
 
-const allowedImageTypes = ["image/jpeg", "image/png", "image/webp"];
-const maxFileSizeInBytes = 5 * 1024 * 1024;
+export const runtime = "nodejs";
+
+const utapi = new UTApi();
+const maxFileSize = 5 * 1024 * 1024;
+const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 function getFileExtension(file: File) {
-  if (file.type === "image/jpeg") {
-    return "jpg";
+  const extensionFromName = file.name.split(".").pop()?.toLowerCase();
+
+  if (extensionFromName && /^[a-z0-9]+$/.test(extensionFromName)) {
+    return extensionFromName;
   }
 
   if (file.type === "image/png") {
@@ -18,11 +22,44 @@ function getFileExtension(file: File) {
     return "webp";
   }
 
-  return "";
+  return "jpg";
+}
+
+function createSafeFileName(file: File) {
+  const extension = getFileExtension(file);
+  const timestamp = Date.now();
+  const randomValue = Math.random().toString(36).slice(2, 10);
+
+  return `locario-company-${timestamp}-${randomValue}.${extension}`;
+}
+
+function getUploadThingImageUrl(data: unknown) {
+  if (!data || typeof data !== "object") {
+    return "";
+  }
+
+  const uploadData = data as {
+    ufsUrl?: string;
+    appUrl?: string;
+    url?: string;
+  };
+
+  return uploadData.ufsUrl || uploadData.url || uploadData.appUrl || "";
 }
 
 export async function POST(request: Request) {
   try {
+    if (!process.env.UPLOADTHING_TOKEN) {
+      return NextResponse.json(
+        {
+          message: "UploadThing ist nicht konfiguriert.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
     const formData = await request.formData();
     const file = formData.get("file");
 
@@ -37,10 +74,10 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!allowedImageTypes.includes(file.type)) {
+    if (!allowedImageTypes.has(file.type)) {
       return NextResponse.json(
         {
-          message: "Nur JPG, PNG und WebP Bilder sind erlaubt.",
+          message: "Nur JPG, PNG und WebP sind erlaubt.",
         },
         {
           status: 400,
@@ -48,7 +85,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (file.size > maxFileSizeInBytes) {
+    if (file.size > maxFileSize) {
       return NextResponse.json(
         {
           message: "Das Bild darf maximal 5 MB gross sein.",
@@ -59,44 +96,48 @@ export async function POST(request: Request) {
       );
     }
 
-    const extension = getFileExtension(file);
+    const uploadFile = new File([file], createSafeFileName(file), {
+      type: file.type,
+      lastModified: Date.now(),
+    });
 
-    if (!extension) {
+    const uploadResponse = await utapi.uploadFiles(uploadFile);
+
+    if (uploadResponse.error) {
       return NextResponse.json(
         {
-          message: "Bildformat konnte nicht erkannt werden.",
+          message:
+            uploadResponse.error.message || "Bild konnte nicht hochgeladen werden.",
         },
         {
-          status: 400,
+          status: 500,
         }
       );
     }
 
-    const uploadsDirectory = path.join(
-      process.cwd(),
-      "public",
-      "uploads",
-      "companies"
-    );
+    const imageUrl = getUploadThingImageUrl(uploadResponse.data);
 
-    await mkdir(uploadsDirectory, {
-      recursive: true,
-    });
-
-    const fileName = `${crypto.randomUUID()}.${extension}`;
-    const filePath = path.join(uploadsDirectory, fileName);
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-
-    await writeFile(filePath, fileBuffer);
+    if (!imageUrl) {
+      return NextResponse.json(
+        {
+          message: "Upload war erfolgreich, aber es wurde keine Bild-URL zurückgegeben.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
 
     return NextResponse.json({
-      imageUrl: `/uploads/companies/${fileName}`,
+      imageUrl,
     });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
       {
-        message: "Bild konnte nicht hochgeladen werden.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Beim Hochladen des Bildes ist ein unbekannter Fehler passiert.",
       },
       {
         status: 500,
@@ -104,5 +145,3 @@ export async function POST(request: Request) {
     );
   }
 }
-
-

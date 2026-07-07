@@ -74,10 +74,6 @@ function isProtectedApiRoute(request: NextRequest) {
     return method === "GET";
   }
 
-  if (pathname.startsWith("/api/uploads/")) {
-    return true;
-  }
-
   return false;
 }
 
@@ -133,6 +129,5 @@ export const config = {
     "/api/leads/:path*",
     "/api/search-logs",
     "/api/search-logs/:path*",
-    "/api/uploads/:path*",
   ],
 };
