@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model Company {
@@ -133,7 +133,7 @@ model Event {
 
   tags        String @default("[]")
   searchTerms String @default("[]")
-  
+
   startsAt DateTime
   endsAt   DateTime?
 
@@ -160,7 +160,7 @@ model EventInquiry {
 
   desiredPlan String @default("highlight")
 
-  category     String   @default("Sonstiges")
+  category     String    @default("Sonstiges")
   locationName String?
   address      String?
   eventDate    DateTime?
