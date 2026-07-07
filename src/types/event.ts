@@ -12,7 +12,13 @@ export type LocarioEvent = {
   locationName: string;
   address: string;
 
+  latitude?: number | null;
+  longitude?: number | null;
+
   description: string;
+
+  tags: string[];
+  searchTerms: string[];
 
   startsAt: string;
   endsAt: string;
@@ -26,4 +32,3 @@ export type LocarioEvent = {
   createdAt: string;
   updatedAt: string;
 };
-

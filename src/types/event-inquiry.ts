@@ -8,6 +8,7 @@ export type EventInquiry = {
   phone: string;
   website: string;
   city: string;
+  address: string;
 
   desiredPlan: string;
 

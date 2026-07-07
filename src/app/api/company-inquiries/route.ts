@@ -9,6 +9,7 @@ type CompanyInquiryRequestBody = {
   phone?: string;
   website?: string;
   city?: string;
+  address?: string;
 
   desiredPlan?: string;
 
@@ -37,6 +38,7 @@ type CompanyInquiryFromDatabase = {
   phone: string | null;
   website: string | null;
   city: string;
+  address: string | null;
 
   desiredPlan: string;
 
@@ -98,6 +100,7 @@ function mapCompanyInquiry(inquiry: CompanyInquiryFromDatabase) {
     phone: inquiry.phone ?? "",
     website: inquiry.website ?? "",
     city: inquiry.city,
+    address: inquiry.address ?? "",
 
     desiredPlan: inquiry.desiredPlan,
 
@@ -141,6 +144,7 @@ export async function POST(request: Request) {
   const phone = body.phone?.trim() || null;
   const website = body.website?.trim() || null;
   const city = body.city?.trim();
+  const address = body.address?.trim() || null;
 
   const desiredPlan = getValidDesiredPlan(body.desiredPlan);
 
@@ -214,6 +218,7 @@ export async function POST(request: Request) {
       phone,
       website,
       city,
+      address,
 
       desiredPlan,
 
@@ -239,4 +244,3 @@ export async function POST(request: Request) {
     status: 201,
   });
 }
-

@@ -9,6 +9,7 @@ type EventInquiryRequestBody = {
   phone?: string;
   website?: string;
   city?: string;
+  address?: string;
 
   desiredPlan?: string;
 
@@ -74,6 +75,7 @@ function mapEventInquiry(inquiry: {
   phone: string | null;
   website: string | null;
   city: string;
+  address: string | null;
   desiredPlan: string;
   category: string;
   locationName: string | null;
@@ -95,6 +97,7 @@ function mapEventInquiry(inquiry: {
     phone: inquiry.phone ?? "",
     website: inquiry.website ?? "",
     city: inquiry.city,
+    address: inquiry.address ?? "",
 
     desiredPlan: inquiry.desiredPlan,
 
@@ -126,19 +129,38 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = (await request.json()) as EventInquiryRequestBody;
 
+  const eventTitle = body.eventTitle?.trim();
+  const organizerName = body.organizerName?.trim();
+  const contactName = body.contactName?.trim();
+  const email = body.email?.trim();
+  const phone = body.phone?.trim() || null;
+  const website = body.website?.trim() || null;
+  const city = body.city?.trim();
+  const address = body.address?.trim();
+
+  const category = body.category?.trim() || "Sonstiges";
+  const locationName = body.locationName?.trim() || null;
+  const description = body.description?.trim();
+  const message = body.message?.trim();
+
+  const tags = (body.tags ?? [])
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
   if (
-    !body.eventTitle?.trim() ||
-    !body.organizerName?.trim() ||
-    !body.contactName?.trim() ||
-    !body.email?.trim() ||
-    !body.city?.trim() ||
-    !body.description?.trim() ||
-    !body.message?.trim()
+    !eventTitle ||
+    !organizerName ||
+    !contactName ||
+    !email ||
+    !city ||
+    !address ||
+    !description ||
+    !message
   ) {
     return NextResponse.json(
       {
         message:
-          "Eventtitel, Veranstalter, Kontaktperson, E-Mail, Stadt, Beschreibung und Nachricht sind erforderlich.",
+          "Eventtitel, Veranstalter, Kontaktperson, E-Mail, Stadt, Adresse, Beschreibung und Nachricht sind erforderlich.",
       },
       {
         status: 400,
@@ -148,24 +170,25 @@ export async function POST(request: Request) {
 
   const inquiry = await prisma.eventInquiry.create({
     data: {
-      eventTitle: body.eventTitle.trim(),
-      organizerName: body.organizerName.trim(),
-      contactName: body.contactName.trim(),
-      email: body.email.trim(),
-      phone: body.phone?.trim() || null,
-      website: body.website?.trim() || null,
-      city: body.city.trim(),
+      eventTitle,
+      organizerName,
+      contactName,
+      email,
+      phone,
+      website,
+      city,
+      address,
 
       desiredPlan: getValidPlan(body.desiredPlan),
 
-      category: body.category?.trim() || "Sonstiges",
-      locationName: body.locationName?.trim() || null,
+      category,
+      locationName,
       eventDate: parseDate(body.eventDate),
 
-      description: body.description.trim(),
-      tags: JSON.stringify(body.tags ?? []),
+      description,
+      tags: JSON.stringify(tags),
 
-      message: body.message.trim(),
+      message,
       status: body.status?.trim() || "new",
     },
   });
@@ -174,4 +197,3 @@ export async function POST(request: Request) {
     status: 201,
   });
 }
-

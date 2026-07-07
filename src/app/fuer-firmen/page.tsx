@@ -5,8 +5,10 @@ import {
   getSubcategoriesForMainCategory,
   mainCategories,
 } from "@/data/categories";
-import { canCompanyUseAdvertising } from "@/data/plans";
 import { eventPlans } from "@/data/event-plans";
+import { getAutomaticEventSearchTerms } from "@/data/event-search-taxonomy";
+import { canCompanyUseAdvertising } from "@/data/plans";
+import { getAutomaticCompanySearchTerms } from "@/data/search-taxonomy";
 
 type RequestType = "company" | "event";
 
@@ -20,7 +22,8 @@ type InquiryForm = {
   email: string;
   phone: string;
   website: string;
-  city: string;
+  address: string;
+  addressAddition: string;
 
   desiredPlan: string;
   eventPlan: string;
@@ -51,7 +54,8 @@ const emptyInquiryForm: InquiryForm = {
   email: "",
   phone: "",
   website: "",
-  city: "",
+  address: "",
+  addressAddition: "",
 
   desiredPlan: "starter",
   eventPlan: "highlight",
@@ -85,7 +89,8 @@ const companyPackages = [
       "Hauptkategorie und Unterkategorien",
       "Kontaktinformationen sichtbar",
       "Website, Telefon und E-Mail sichtbar",
-      "Suchbegriffe / Leistungen",
+      "Adresse / Standort sichtbar",
+      "Automatische Suchlogik",
       "Titelbild möglich",
       "Auffindbar in Firmenübersicht und Suche",
     ],
@@ -145,6 +150,12 @@ const eventCategories = [
   "Familie",
   "Kultur",
   "Gastronomie",
+  "Kurs",
+  "Gesundheit",
+  "Senioren",
+  "Jugend",
+  "Kirche",
+  "Dorf",
   "Sonstiges",
 ];
 
@@ -157,7 +168,7 @@ const benefits = [
   {
     title: "Moderne Darstellung",
     description:
-      "Firmen und Events erscheinen mit Bild, Beschreibung, Ort, Kontakt, Kategorien, Angeboten und klaren Aktionen.",
+      "Firmen und Events erscheinen mit Bild, Beschreibung, Ort, Adresse, Kontakt, Kategorien, Angeboten und klaren Aktionen.",
   },
   {
     title: "Direkte Nachfrage",
@@ -182,7 +193,7 @@ const steps = [
     title: "Angaben erfassen",
     number: "02",
     description:
-      "Trage Firma, Veranstalter, Ort, Beschreibung, Kontakt und gewünschtes Paket ein.",
+      "Trage Firma, Veranstalter, Adresse, Beschreibung, Kontakt und gewünschtes Paket ein.",
   },
   {
     title: "Prüfung durch Locario",
@@ -231,7 +242,7 @@ const faqs = [
   {
     question: "Was ist im Starter-Paket enthalten?",
     answer:
-      "Starter ist ein einfaches Sichtbarkeitspaket. Die Firma erhält ein öffentliches Profil mit Kontaktangaben, Website, Telefon, E-Mail, Kategorien, Beschreibung und Suchbegriffen. Locario-Leads, Partner-Dashboard und Werbeanzeigen sind erst ab Pro verfügbar.",
+      "Starter ist ein einfaches Sichtbarkeitspaket. Die Firma erhält ein öffentliches Profil mit Kontaktangaben, Adresse, Website, Telefon, E-Mail, Kategorien, Beschreibung und automatischen Suchbegriffen. Locario-Leads, Partner-Dashboard und Werbeanzeigen sind erst ab Pro verfügbar.",
   },
   {
     question: "Was ist der Unterschied zwischen Starter und Pro?",
@@ -245,14 +256,117 @@ const faqs = [
   },
 ];
 
+function getCityFromAddress(address: string) {
+  const trimmedAddress = address.trim();
+
+  if (!trimmedAddress) {
+    return "";
+  }
+
+  const addressParts = trimmedAddress
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const normalizedPart = part.toLowerCase();
+
+      return !["schweiz", "switzerland", "suisse", "svizzera"].includes(
+        normalizedPart
+      );
+    });
+
+  const partWithZip = [...addressParts]
+    .reverse()
+    .find((part) => /\b\d{4,5}\s+/.test(part));
+
+  if (partWithZip) {
+    return partWithZip.replace(/^.*?\b\d{4,5}\s+/, "").trim();
+  }
+
+  if (addressParts.length > 1) {
+    return addressParts[addressParts.length - 1]
+      .replace(/^\d{4,5}\s+/, "")
+      .trim();
+  }
+
+  return "";
+}
+
+function getFullAddress(address: string, addressAddition: string) {
+  const cleanAddress = address.trim();
+  const cleanAddressAddition = addressAddition.trim();
+
+  if (!cleanAddressAddition) {
+    return cleanAddress;
+  }
+
+  return `${cleanAddress} · ${cleanAddressAddition}`;
+}
+
+function getTermsFromText(value: string) {
+  return value
+    .split(",")
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function normalizeSearchTerm(value: string) {
+  return value.toLowerCase().trim();
+}
+
+function uniqueValues(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueItems: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+
+    if (!cleanValue) {
+      return;
+    }
+
+    const normalizedValue = normalizeSearchTerm(cleanValue);
+
+    if (seenValues.has(normalizedValue)) {
+      return;
+    }
+
+    seenValues.add(normalizedValue);
+    uniqueItems.push(cleanValue);
+  });
+
+  return uniqueItems;
+}
+
+function getActiveSearchTerms(terms: string[], excludedTerms: string[]) {
+  const excludedSet = new Set(excludedTerms.map(normalizeSearchTerm));
+
+  return uniqueValues(terms).filter(
+    (term) => !excludedSet.has(normalizeSearchTerm(term))
+  );
+}
+
 export default function ForCompaniesPage() {
   const [form, setForm] = useState<InquiryForm>(emptyInquiryForm);
+  const [excludedSearchTerms, setExcludedSearchTerms] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const isEventRequest = form.requestType === "event";
   const advertisingAllowed = canCompanyUseAdvertising(form.desiredPlan);
+
+  const derivedCity = useMemo(() => {
+    return getCityFromAddress(form.address);
+  }, [form.address]);
+
+  const fullAddress = useMemo(() => {
+    return getFullAddress(form.address, form.addressAddition);
+  }, [form.address, form.addressAddition]);
+
+  const manualExtraTags = useMemo(() => {
+    return getTermsFromText(form.tags);
+  }, [form.tags]);
 
   const availableSubCategories = useMemo(() => {
     if (!form.mainCategory) {
@@ -269,6 +383,37 @@ export default function ForCompaniesPage() {
   const selectedEventPackage = eventPlans.find(
     (item) => item.value === form.eventPlan
   );
+
+  const automaticCompanyTags = useMemo(() => {
+    return uniqueValues([
+      form.mainCategory,
+      ...form.subCategories,
+      ...manualExtraTags,
+    ]);
+  }, [form.mainCategory, form.subCategories, manualExtraTags]);
+
+  const automaticCompanySearchTerms = useMemo(() => {
+    return getAutomaticCompanySearchTerms({
+      mainCategory: form.mainCategory,
+      subCategories: form.subCategories,
+      tags: manualExtraTags,
+    });
+  }, [form.mainCategory, form.subCategories, manualExtraTags]);
+
+  const automaticEventSearchTerms = useMemo(() => {
+    return getAutomaticEventSearchTerms({
+      category: form.eventCategory,
+      tags: manualExtraTags,
+    });
+  }, [form.eventCategory, manualExtraTags]);
+
+  const visibleSearchPreviewTerms = isEventRequest
+    ? automaticEventSearchTerms
+    : automaticCompanySearchTerms;
+
+  const activeSearchPreviewTerms = useMemo(() => {
+    return getActiveSearchTerms(visibleSearchPreviewTerms, excludedSearchTerms);
+  }, [visibleSearchPreviewTerms, excludedSearchTerms]);
 
   function updateField(field: keyof InquiryForm, value: string) {
     setForm((currentForm) => ({
@@ -287,6 +432,8 @@ export default function ForCompaniesPage() {
       adDescription: value === "event" ? "" : currentForm.adDescription,
       adCta: value === "event" ? "" : currentForm.adCta,
     }));
+
+    setExcludedSearchTerms([]);
   }
 
   function updateCompanyPlan(plan: string) {
@@ -302,6 +449,8 @@ export default function ForCompaniesPage() {
         adCta: planAllowsAdvertising ? currentForm.adCta : "",
       };
     });
+
+    setExcludedSearchTerms([]);
   }
 
   function updateMainCategory(value: string) {
@@ -310,6 +459,8 @@ export default function ForCompaniesPage() {
       mainCategory: value,
       subCategories: [],
     }));
+
+    setExcludedSearchTerms([]);
   }
 
   function toggleSubCategory(subCategory: string) {
@@ -330,6 +481,37 @@ export default function ForCompaniesPage() {
         subCategories: [...currentForm.subCategories, subCategory],
       };
     });
+  }
+
+  function toggleSearchTerm(term: string) {
+    const normalizedTerm = normalizeSearchTerm(term);
+    const isCurrentlyExcluded = excludedSearchTerms.includes(normalizedTerm);
+    const activeTerms = getActiveSearchTerms(
+      visibleSearchPreviewTerms,
+      excludedSearchTerms
+    );
+
+    if (!isCurrentlyExcluded && activeTerms.length <= 1) {
+      setErrorMessage("Mindestens ein Suchbegriff muss aktiv bleiben.");
+
+      setTimeout(() => {
+        setErrorMessage("");
+      }, 3000);
+
+      return;
+    }
+
+    setExcludedSearchTerms((currentTerms) => {
+      if (currentTerms.includes(normalizedTerm)) {
+        return currentTerms.filter((item) => item !== normalizedTerm);
+      }
+
+      return [...currentTerms, normalizedTerm];
+    });
+  }
+
+  function activateAllSearchTerms() {
+    setExcludedSearchTerms([]);
   }
 
   function scrollToInquiry() {
@@ -355,11 +537,19 @@ export default function ForCompaniesPage() {
       eventPlan: plan,
     }));
 
+    setExcludedSearchTerms([]);
     scrollToInquiry();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!form.address.trim() || !derivedCity) {
+      setErrorMessage(
+        "Bitte gib eine vollständige Adresse ein, damit Locario den Ort automatisch erkennen kann. Format: Strasse Hausnummer, PLZ Ort."
+      );
+      return;
+    }
 
     if (!isEventRequest && form.subCategories.length === 0) {
       setErrorMessage("Bitte wähle mindestens eine Unterkategorie aus.");
@@ -372,12 +562,11 @@ export default function ForCompaniesPage() {
         !form.organizerName.trim() ||
         !form.contactName.trim() ||
         !form.email.trim() ||
-        !form.city.trim() ||
         !form.description.trim() ||
         !form.message.trim())
     ) {
       setErrorMessage(
-        "Bitte fülle Eventtitel, Veranstalter, Kontaktperson, E-Mail, Stadt, Beschreibung und Nachricht aus."
+        "Bitte fülle Eventtitel, Veranstalter, Kontaktperson, E-Mail, Adresse, Beschreibung und Nachricht aus."
       );
       return;
     }
@@ -387,12 +576,22 @@ export default function ForCompaniesPage() {
       setSuccessMessage("");
       setErrorMessage("");
 
-      const tags = form.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
+      const selectedCompanySearchTerms = getActiveSearchTerms(
+        automaticCompanySearchTerms,
+        excludedSearchTerms
+      );
+
+      const selectedEventSearchTerms = getActiveSearchTerms(
+        automaticEventSearchTerms,
+        excludedSearchTerms
+      );
 
       if (isEventRequest) {
+        const eventTags = uniqueValues([
+          ...manualExtraTags,
+          ...selectedEventSearchTerms,
+        ]);
+
         const response = await fetch("/api/event-inquiries", {
           method: "POST",
           headers: {
@@ -405,7 +604,8 @@ export default function ForCompaniesPage() {
             email: form.email,
             phone: form.phone,
             website: form.website,
-            city: form.city,
+            city: derivedCity,
+            address: fullAddress,
 
             desiredPlan: form.eventPlan,
 
@@ -414,7 +614,8 @@ export default function ForCompaniesPage() {
             eventDate: form.eventDate,
 
             description: form.description,
-            tags,
+            tags: eventTags,
+            searchTerms: selectedEventSearchTerms,
 
             message: form.message,
             status: "new",
@@ -437,6 +638,8 @@ export default function ForCompaniesPage() {
           eventPlan: selectedEventPlan,
         });
 
+        setExcludedSearchTerms([]);
+
         setSuccessMessage(
           "Danke! Deine Event-Anfrage wurde erfolgreich gesendet. Locario kann dein Event nun prüfen und dich kontaktieren."
         );
@@ -450,12 +653,6 @@ export default function ForCompaniesPage() {
 
       const mainCategory = form.mainCategory;
       const subCategories = form.subCategories;
-
-      const searchTerms = [
-        mainCategory.toLowerCase(),
-        ...subCategories.map((subCategory) => subCategory.toLowerCase()),
-        ...tags.map((tag) => tag.toLowerCase()),
-      ].filter(Boolean);
 
       const requestInfo = [
         "Anfragetyp: Firmenprofil",
@@ -477,7 +674,8 @@ export default function ForCompaniesPage() {
           email: form.email,
           phone: form.phone,
           website: form.website,
-          city: form.city,
+          city: derivedCity,
+          address: fullAddress,
 
           desiredPlan: form.desiredPlan,
 
@@ -487,8 +685,8 @@ export default function ForCompaniesPage() {
           category: subCategories[0],
 
           description: form.description,
-          tags,
-          searchTerms,
+          tags: automaticCompanyTags,
+          searchTerms: selectedCompanySearchTerms,
 
           adTitle: advertisingAllowed ? form.adTitle : "",
           adDescription: advertisingAllowed ? form.adDescription : "",
@@ -513,6 +711,8 @@ export default function ForCompaniesPage() {
         requestType: "company",
         desiredPlan: selectedCompanyPlan,
       });
+
+      setExcludedSearchTerms([]);
 
       setSuccessMessage(
         "Danke! Deine Firmenanfrage wurde erfolgreich gesendet. Locario kann dein Profil nun prüfen und dich kontaktieren."
@@ -610,7 +810,7 @@ export default function ForCompaniesPage() {
               <div className="mt-8 grid gap-4">
                 <MiniInfo
                   title="Starter"
-                  description="Einfach sichtbar mit öffentlichem Firmenprofil und Kontaktangaben."
+                  description="Einfach sichtbar mit öffentlichem Firmenprofil, Adresse und Kontaktangaben."
                 />
 
                 <MiniInfo
@@ -787,7 +987,7 @@ export default function ForCompaniesPage() {
                   description={item.description}
                   features={[
                     "Event-Kachel auf Locario",
-                    "Bild, Datum, Ort und Beschreibung",
+                    "Bild, Datum, Ort, Adresse und Beschreibung",
                     "Website- oder Ticketlink",
                     item.value === "basic"
                       ? "Normale Darstellung"
@@ -828,7 +1028,7 @@ export default function ForCompaniesPage() {
 
               <p className="mt-5 text-slate-300">
                 {isEventRequest
-                  ? "Erfasse dein Event mit Veranstalter, Kategorie, Datum, Ort und gewünschtem Wochenpaket."
+                  ? "Erfasse dein Event mit Veranstalter, Kategorie, Datum, Adresse und gewünschtem Wochenpaket."
                   : "Je vollständiger deine Angaben sind, desto schneller kann Locario dein Firmenprofil prüfen und veröffentlichen."}
               </p>
 
@@ -1002,22 +1202,23 @@ export default function ForCompaniesPage() {
                   />
                 </div>
 
-                <div className="grid gap-5 md:grid-cols-2">
-                  <InputField
-                    label="Website"
-                    value={form.website}
-                    onChange={(value) => updateField("website", value)}
-                    placeholder="https://www.firma.ch"
-                  />
+                <InputField
+                  label="Website"
+                  value={form.website}
+                  onChange={(value) => updateField("website", value)}
+                  placeholder="https://www.firma.ch"
+                />
 
-                  <InputField
-                    label="Stadt / Region"
-                    value={form.city}
-                    onChange={(value) => updateField("city", value)}
-                    placeholder="Zum Beispiel: Aarau"
-                    required
-                  />
-                </div>
+                <AddressCard
+                  value={form.address}
+                  addressAddition={form.addressAddition}
+                  derivedCity={derivedCity}
+                  isEventRequest={isEventRequest}
+                  onChange={(value) => updateField("address", value)}
+                  onChangeAddressAddition={(value) =>
+                    updateField("addressAddition", value)
+                  }
+                />
 
                 {isEventRequest && (
                   <>
@@ -1025,7 +1226,10 @@ export default function ForCompaniesPage() {
                       <SelectField
                         label="Event-Kategorie"
                         value={form.eventCategory}
-                        onChange={(value) => updateField("eventCategory", value)}
+                        onChange={(value) => {
+                          updateField("eventCategory", value);
+                          setExcludedSearchTerms([]);
+                        }}
                         options={eventCategories.map((category) => ({
                           value: category,
                           label: category,
@@ -1084,6 +1288,31 @@ export default function ForCompaniesPage() {
                   </>
                 )}
 
+                <InputField
+                  label="Zusatzlabels / Spezialbegriffe (optional)"
+                  value={form.tags}
+                  onChange={(value) => updateField("tags", value)}
+                  placeholder={
+                    isEventRequest
+                      ? "Zum Beispiel: kinderfreundlich, live musik, gratis"
+                      : "Zum Beispiel: vegan, 24h, terrasse, notdienst"
+                  }
+                />
+
+                <SearchPreviewCard
+                  isEventRequest={isEventRequest}
+                  terms={visibleSearchPreviewTerms}
+                  activeTerms={activeSearchPreviewTerms}
+                  excludedTerms={excludedSearchTerms}
+                  hasEnoughBaseData={
+                    isEventRequest
+                      ? Boolean(form.eventCategory)
+                      : Boolean(form.mainCategory && form.subCategories.length)
+                  }
+                  onToggleTerm={toggleSearchTerm}
+                  onActivateAll={activateAllSearchTerms}
+                />
+
                 <TextareaField
                   label={
                     isEventRequest
@@ -1098,22 +1327,6 @@ export default function ForCompaniesPage() {
                       : "Beschreibe deine Firma, deine Leistungen, dein Angebot und deine Zielregion."
                   }
                   rows={5}
-                  required
-                />
-
-                <InputField
-                  label={
-                    isEventRequest
-                      ? "Suchbegriffe / Event-Stichwörter"
-                      : "Suchbegriffe / Stichwörter"
-                  }
-                  value={form.tags}
-                  onChange={(value) => updateField("tags", value)}
-                  placeholder={
-                    isEventRequest
-                      ? "Konzert, Markt, Familie, Verein, Party"
-                      : "Garage, Occasionen, Neuwagen, Lackiererei"
-                  }
                   required
                 />
 
@@ -1386,6 +1599,206 @@ function PackageCard({
   );
 }
 
+function AddressCard({
+  value,
+  addressAddition,
+  derivedCity,
+  isEventRequest,
+  onChange,
+  onChangeAddressAddition,
+}: {
+  value: string;
+  addressAddition: string;
+  derivedCity: string;
+  isEventRequest: boolean;
+  onChange: (value: string) => void;
+  onChangeAddressAddition: (value: string) => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-cyan-300/25 bg-cyan-300/10 p-5 shadow-xl shadow-cyan-950/10">
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-start">
+        <div>
+          <label className="text-lg font-black text-cyan-100">
+            {isEventRequest
+              ? "Adresse des Veranstaltungsorts"
+              : "Adresse der Firma"}
+          </label>
+
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Gib die vollständige Adresse ein. Locario erkennt daraus automatisch
+            den Ort für Suche, Admin und Veröffentlichung.
+          </p>
+        </div>
+
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            derivedCity
+              ? "border-cyan-300/30 bg-slate-950/70"
+              : "border-white/10 bg-slate-950/50"
+          }`}
+        >
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+            Erkannter Ort
+          </p>
+
+          <p
+            className={`mt-1 font-black ${
+              derivedCity ? "text-cyan-100" : "text-slate-500"
+            }`}
+          >
+            {derivedCity || "Noch nicht erkannt"}
+          </p>
+        </div>
+      </div>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="Strasse Hausnummer, PLZ Ort"
+        required
+        className="mt-5 w-full rounded-2xl border border-cyan-300/40 bg-slate-950/70 px-4 py-4 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+      />
+
+      <input
+        value={addressAddition}
+        onChange={(event) => onChangeAddressAddition(event.target.value)}
+        placeholder={
+          isEventRequest
+            ? "Optionaler Zusatz: Halle, Eingang, Stockwerk, Standplatz..."
+            : "Optionaler Zusatz: Eingang, Stockwerk, Büro, Ladenlokal..."
+        }
+        className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+      />
+
+      <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+        <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+          Empfohlenes Format
+        </p>
+
+        <p className="mt-1 text-sm text-slate-300">
+          Strasse Hausnummer, PLZ Ort
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SearchPreviewCard({
+  isEventRequest,
+  terms,
+  activeTerms,
+  excludedTerms,
+  hasEnoughBaseData,
+  onToggleTerm,
+  onActivateAll,
+}: {
+  isEventRequest: boolean;
+  terms: string[];
+  activeTerms: string[];
+  excludedTerms: string[];
+  hasEnoughBaseData: boolean;
+  onToggleTerm: (term: string) => void;
+  onActivateAll: () => void;
+}) {
+  const shownTerms = uniqueValues(terms).slice(0, 48);
+  const excludedSet = new Set(excludedTerms.map(normalizeSearchTerm));
+  const inactiveCount = shownTerms.filter((term) =>
+    excludedSet.has(normalizeSearchTerm(term))
+  ).length;
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-slate-950/50 p-5">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+        <div>
+          <h3 className="text-lg font-black text-white">
+            Automatische Suchlogik
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Locario schlägt passende Suchbegriffe automatisch vor. Alle Begriffe
+            sind zuerst aktiv. Unpassende Begriffe kannst du per Klick abwählen.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-xs font-black text-emerald-100">
+            {activeTerms.length} aktiv
+          </span>
+
+          <button
+            type="button"
+            onClick={onActivateAll}
+            disabled={inactiveCount === 0}
+            className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Alle aktivieren
+          </button>
+        </div>
+      </div>
+
+      {!hasEnoughBaseData && (
+        <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+          Wähle zuerst die passende Kategorie aus. Danach erscheinen hier die
+          automatisch erkannten Suchbegriffe.
+        </p>
+      )}
+
+      {hasEnoughBaseData && shownTerms.length > 0 && (
+        <>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {shownTerms.map((term, termIndex) => {
+              const isExcluded = excludedSet.has(normalizeSearchTerm(term));
+              const isLastActive = !isExcluded && activeTerms.length <= 1;
+
+              return (
+                <button
+                  key={`${normalizeSearchTerm(term)}-${termIndex}`}
+                  type="button"
+                  onClick={() => onToggleTerm(term)}
+                  disabled={isLastActive}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    isExcluded
+                      ? "border-red-300/20 bg-red-300/10 text-red-200 line-through hover:bg-red-300/20"
+                      : "border-emerald-300/20 bg-emerald-300/10 text-emerald-100 hover:bg-emerald-300/20"
+                  }`}
+                  title={
+                    isLastActive
+                      ? "Mindestens ein Suchbegriff muss aktiv bleiben."
+                      : isExcluded
+                        ? "Wieder aktivieren"
+                        : "Abwählen"
+                  }
+                >
+                  {isExcluded ? "+ " : "✓ "}
+                  {term}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="mt-4 text-xs text-slate-500">
+            Grün = wird gespeichert. Rot/durchgestrichen = wird nicht
+            gespeichert.
+          </p>
+        </>
+      )}
+
+      {hasEnoughBaseData && shownTerms.length === 0 && (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+          Noch keine Suchbegriffe erkannt. Ergänze optional Spezialbegriffe.
+        </p>
+      )}
+
+      {hasEnoughBaseData && terms.length > shownTerms.length && (
+        <p className="mt-4 text-xs text-slate-500">
+          Es werden die wichtigsten {shownTerms.length} von {terms.length}{" "}
+          Begriffen angezeigt.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function InputField({
   label,
   value,
@@ -1553,4 +1966,3 @@ function MultiSelectField({
     </div>
   );
 }
-

@@ -220,6 +220,7 @@ function getInquirySearchText(inquiry: CompanyInquiry) {
     inquiry.phone,
     inquiry.website,
     inquiry.city,
+    inquiry.address,
     inquiry.desiredPlan,
     inquiry.mainCategory,
     inquiry.subCategory,
@@ -689,7 +690,7 @@ export default function AdminCompanyInquiriesPage() {
             label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Firma, Kontakt, Ort, Kategorie, E-Mail..."
+            placeholder="Firma, Kontakt, Ort, Adresse, Kategorie, E-Mail..."
           />
 
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_1fr]">
@@ -802,7 +803,8 @@ export default function AdminCompanyInquiriesPage() {
                       </div>
 
                       <p className="mt-2 text-sm text-slate-300">
-                        {inquiry.city} ·{" "}
+                        {inquiry.city}
+                        {inquiry.address ? ` · ${inquiry.address}` : ""} ·{" "}
                         {inquiry.mainCategory || "Keine Kategorie"} ·{" "}
                         {inquiry.subCategory || "Keine Unterkategorie"}
                       </p>
@@ -1164,6 +1166,10 @@ function CompanyInquiryDrawer({
               <div className="grid gap-4 md:grid-cols-2">
                 <DetailBox title="Kontaktperson" value={inquiry.contactName} />
                 <DetailBox title="Stadt" value={inquiry.city} />
+                <DetailBox
+                  title="Adresse"
+                  value={inquiry.address || "Nicht angegeben"}
+                />
                 <DetailBox title="E-Mail" value={inquiry.email} />
                 <DetailBox
                   title="Telefon"

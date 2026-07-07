@@ -1,0 +1,2363 @@
+export type CompanySearchTaxonomyEntry = {
+  label: string;
+  keywords: string[];
+};
+
+const companySearchTaxonomy: CompanySearchTaxonomyEntry[] = [
+  {
+    label: "Bau, Garten & Material",
+    keywords: [
+      "bau",
+      "bauen",
+      "baubedarf",
+      "baumaterial",
+      "baustoffe",
+      "material",
+      "garten",
+      "gartenbau",
+      "gartenpflege",
+      "aussenbereich",
+      "umbau",
+      "renovation",
+      "sanierung",
+      "handwerk",
+      "baustelle",
+    ],
+  },
+  {
+    label: "Kieswerk",
+    keywords: [
+      "kieswerk",
+      "kies",
+      "wandkies",
+      "rundkies",
+      "splitt",
+      "sand",
+      "schotter",
+      "humus",
+      "aushubmaterial",
+      "baustoffe",
+      "baumaterial",
+      "material liefern",
+    ],
+  },
+  {
+    label: "Sand & Splitt",
+    keywords: [
+      "sand",
+      "splitt",
+      "kies",
+      "schotter",
+      "bausand",
+      "spielsand",
+      "streusplitt",
+      "gartenkies",
+      "material",
+    ],
+  },
+  {
+    label: "Baustoffhandel",
+    keywords: [
+      "baustoffhandel",
+      "baustoffe",
+      "baumarkt",
+      "baumaterial",
+      "bauzubehör",
+      "bauzubehoer",
+      "materialhandel",
+      "zement",
+      "beton",
+      "backsteine",
+      "platten",
+    ],
+  },
+  {
+    label: "Bauunternehmen",
+    keywords: [
+      "bauunternehmen",
+      "baufirma",
+      "hochbau",
+      "tiefbau",
+      "umbau",
+      "neubau",
+      "sanierung",
+      "renovation",
+      "baumeister",
+      "bauarbeiten",
+    ],
+  },
+  {
+    label: "Gartenbau",
+    keywords: [
+      "gartenbau",
+      "gärtner",
+      "gaertner",
+      "garten gestalten",
+      "gartengestaltung",
+      "gartenanlage",
+      "rasen",
+      "pflanzen",
+      "hecken",
+      "naturstein",
+      "sitzplatz",
+      "aussenanlage",
+    ],
+  },
+  {
+    label: "Gartenpflege",
+    keywords: [
+      "gartenpflege",
+      "rasen mähen",
+      "rasen maehen",
+      "hecke schneiden",
+      "bäume schneiden",
+      "baeume schneiden",
+      "unkraut",
+      "gartenunterhalt",
+      "winterdienst",
+      "laub",
+      "pflege",
+    ],
+  },
+  {
+    label: "Aushub & Erdarbeiten",
+    keywords: [
+      "aushub",
+      "erdarbeiten",
+      "bagger",
+      "baggerarbeiten",
+      "tiefbau",
+      "baugrube",
+      "humus abtragen",
+      "terrain",
+      "planieren",
+      "gelände",
+      "gelaende",
+    ],
+  },
+  {
+    label: "Baggerarbeiten",
+    keywords: [
+      "baggerarbeiten",
+      "bagger",
+      "minibagger",
+      "aushub",
+      "erdarbeiten",
+      "graben",
+      "baugrube",
+      "planieren",
+      "abbruch",
+    ],
+  },
+  {
+    label: "Beton & Zement",
+    keywords: [
+      "beton",
+      "zement",
+      "betonarbeiten",
+      "fundament",
+      "mörtel",
+      "moertel",
+      "beton liefern",
+      "bodenplatte",
+      "mauerwerk",
+    ],
+  },
+  {
+    label: "Muldenservice",
+    keywords: [
+      "muldenservice",
+      "mulde",
+      "mulden",
+      "abfallmulde",
+      "baugut",
+      "entsorgung",
+      "bauschutt",
+      "räumung",
+      "raeumung",
+      "container",
+    ],
+  },
+  {
+    label: "Gerüstbau",
+    keywords: [
+      "gerüstbau",
+      "geruestbau",
+      "gerüst",
+      "geruest",
+      "fassadengerüst",
+      "baugerüst",
+      "sicherheitsgerüst",
+      "arbeitsgerüst",
+    ],
+  },
+  {
+    label: "Plattenleger",
+    keywords: [
+      "plattenleger",
+      "platten",
+      "fliesen",
+      "keramikplatten",
+      "bodenplatten",
+      "wandplatten",
+      "naturstein",
+      "badplatten",
+      "terrasse",
+    ],
+  },
+  {
+    label: "Bodenleger",
+    keywords: [
+      "bodenleger",
+      "boden",
+      "parkett",
+      "laminat",
+      "vinyl",
+      "teppich",
+      "bodenbelag",
+      "bodenbeläge",
+      "bodenbelaege",
+      "linoleum",
+    ],
+  },
+  {
+    label: "Fenster & Türen",
+    keywords: [
+      "fenster",
+      "türen",
+      "tueren",
+      "haustür",
+      "haustuer",
+      "innentüren",
+      "innentueren",
+      "fensterbau",
+      "türmontage",
+      "tuermontage",
+      "glas",
+    ],
+  },
+  {
+    label: "Storen & Beschattung",
+    keywords: [
+      "storen",
+      "beschattung",
+      "sonnenschutz",
+      "rollladen",
+      "lamellenstoren",
+      "markise",
+      "sonnenstore",
+      "raffstore",
+      "storen reparatur",
+    ],
+  },
+
+  {
+    label: "Handwerk & Reparaturen",
+    keywords: [
+      "handwerk",
+      "handwerker",
+      "reparatur",
+      "reparaturen",
+      "montage",
+      "unterhalt",
+      "service",
+      "notfalldienst",
+      "renovation",
+      "sanierung",
+      "allrounder",
+    ],
+  },
+  {
+    label: "Elektriker",
+    keywords: [
+      "elektriker",
+      "elektro",
+      "elektroinstallateur",
+      "strom",
+      "steckdose",
+      "lampen",
+      "beleuchtung",
+      "sicherung",
+      "elektroinstallation",
+      "smart home",
+    ],
+  },
+  {
+    label: "Sanitär",
+    keywords: [
+      "sanitär",
+      "sanitaer",
+      "sanitärinstallateur",
+      "sanitaerinstallateur",
+      "wasser",
+      "bad",
+      "wc",
+      "lavabo",
+      "dusche",
+      "boiler",
+      "rohrbruch",
+      "abfluss",
+    ],
+  },
+  {
+    label: "Heizung",
+    keywords: [
+      "heizung",
+      "heizungsinstallateur",
+      "wärmepumpe",
+      "waermepumpe",
+      "ölheizung",
+      "oelheizung",
+      "gasheizung",
+      "bodenheizung",
+      "radiator",
+      "heizungsservice",
+    ],
+  },
+  {
+    label: "Lüftung & Klima",
+    keywords: [
+      "lüftung",
+      "lueftung",
+      "klima",
+      "klimaanlage",
+      "lüftungsanlage",
+      "lueftungsanlage",
+      "ventilation",
+      "kühlung",
+      "kuehlung",
+      "raumklima",
+    ],
+  },
+  {
+    label: "Maler & Gipser",
+    keywords: [
+      "maler",
+      "gipser",
+      "malerarbeiten",
+      "streichen",
+      "farbe",
+      "fassade",
+      "verputz",
+      "abrieb",
+      "tapezieren",
+      "renovation",
+    ],
+  },
+  {
+    label: "Schreiner",
+    keywords: [
+      "schreiner",
+      "schreinerei",
+      "möbel",
+      "moebel",
+      "holz",
+      "einbauschrank",
+      "küche",
+      "kueche",
+      "türen",
+      "tueren",
+      "massanfertigung",
+    ],
+  },
+  {
+    label: "Zimmermann",
+    keywords: [
+      "zimmermann",
+      "zimmerei",
+      "holzbau",
+      "dachstock",
+      "carport",
+      "pergola",
+      "fassade holz",
+      "holzarbeiten",
+      "umbau",
+    ],
+  },
+  {
+    label: "Dachdecker",
+    keywords: [
+      "dachdecker",
+      "dach",
+      "dachsanierung",
+      "ziegel",
+      "flachdach",
+      "steildach",
+      "dachfenster",
+      "dachreparatur",
+      "abdichtung",
+    ],
+  },
+  {
+    label: "Spengler",
+    keywords: [
+      "spengler",
+      "spenglerei",
+      "blech",
+      "dachrinne",
+      "regenrinne",
+      "ablaufrohr",
+      "metallfassade",
+      "dachblech",
+    ],
+  },
+  {
+    label: "Schlosser",
+    keywords: [
+      "schlosser",
+      "schlosserei",
+      "metallbau",
+      "geländer",
+      "gelaender",
+      "tor",
+      "stahl",
+      "metall",
+      "treppe",
+      "zaun",
+    ],
+  },
+  {
+    label: "Glaser",
+    keywords: [
+      "glaser",
+      "glaserei",
+      "glas",
+      "fensterglas",
+      "glasbruch",
+      "spiegel",
+      "duschwand",
+      "verglasung",
+      "sicherheitsglas",
+    ],
+  },
+  {
+    label: "Haushaltgeräte Reparatur",
+    keywords: [
+      "haushaltgeräte reparatur",
+      "haushaltgeraete reparatur",
+      "geräte reparatur",
+      "geraete reparatur",
+      "waschmaschine",
+      "tumbler",
+      "geschirrspüler",
+      "geschirrspueler",
+      "kühlschrank",
+      "kuehlschrank",
+      "backofen",
+    ],
+  },
+  {
+    label: "Allrounder",
+    keywords: [
+      "allrounder",
+      "handwerker allrounder",
+      "kleinreparaturen",
+      "montage",
+      "möbel montieren",
+      "moebel montieren",
+      "hausarbeiten",
+      "unterhalt",
+      "reparaturservice",
+    ],
+  },
+  {
+    label: "Notfalldienst",
+    keywords: [
+      "notfalldienst",
+      "notdienst",
+      "24h",
+      "sofort hilfe",
+      "dringend",
+      "pikettdienst",
+      "störung",
+      "stoerung",
+      "reparatur notfall",
+    ],
+  },
+
+  {
+    label: "Auto, Garage & Fahrzeuge",
+    keywords: [
+      "auto",
+      "garage",
+      "fahrzeug",
+      "fahrzeuge",
+      "autowerkstatt",
+      "reparatur",
+      "service",
+      "reifen",
+      "carrosserie",
+      "occasion",
+      "neuwagen",
+    ],
+  },
+  {
+    label: "Autohaus",
+    keywords: [
+      "autohaus",
+      "autohändler",
+      "autohaendler",
+      "auto kaufen",
+      "neuwagen",
+      "occasionen",
+      "fahrzeuge",
+      "probefahrt",
+      "verkauf",
+    ],
+  },
+  {
+    label: "Garage",
+    keywords: [
+      "garage",
+      "autogarage",
+      "autoservice",
+      "autowerkstatt",
+      "service",
+      "reparatur",
+      "fahrzeugcheck",
+      "mfk",
+      "diagnose",
+    ],
+  },
+  {
+    label: "Occasionen",
+    keywords: [
+      "occasionen",
+      "occasion",
+      "gebrauchtwagen",
+      "auto gebraucht",
+      "auto kaufen",
+      "fahrzeug kaufen",
+      "verkauf",
+      "autoangebote",
+    ],
+  },
+  {
+    label: "Neuwagen",
+    keywords: [
+      "neuwagen",
+      "neues auto",
+      "auto kaufen",
+      "fahrzeug kaufen",
+      "autohändler",
+      "autohaendler",
+      "probefahrt",
+      "leasing",
+    ],
+  },
+  {
+    label: "Autowerkstatt",
+    keywords: [
+      "autowerkstatt",
+      "auto reparatur",
+      "autoservice",
+      "fahrzeugservice",
+      "ölwechsel",
+      "oelwechsel",
+      "bremsen",
+      "mfk",
+      "diagnose",
+      "service",
+    ],
+  },
+  {
+    label: "Reifenservice",
+    keywords: [
+      "reifenservice",
+      "reifen",
+      "pneu",
+      "pneuwechsel",
+      "winterreifen",
+      "sommerreifen",
+      "reifen montieren",
+      "auswuchten",
+      "reifenhotel",
+    ],
+  },
+  {
+    label: "Carrosserie",
+    keywords: [
+      "carrosserie",
+      "karosserie",
+      "unfallreparatur",
+      "beulen",
+      "dellen",
+      "lackschaden",
+      "fahrzeugschaden",
+      "spenglerei auto",
+    ],
+  },
+  {
+    label: "Autolackiererei",
+    keywords: [
+      "autolackiererei",
+      "lackiererei",
+      "auto lackieren",
+      "lackschaden",
+      "kratzer",
+      "fahrzeuglack",
+      "spot repair",
+    ],
+  },
+  {
+    label: "Fahrzeugaufbereitung",
+    keywords: [
+      "fahrzeugaufbereitung",
+      "auto aufbereitung",
+      "autopflege",
+      "innenreinigung",
+      "polieren",
+      "lackpflege",
+      "keramikversiegelung",
+      "detailing",
+    ],
+  },
+  {
+    label: "Autovermietung",
+    keywords: [
+      "autovermietung",
+      "auto mieten",
+      "mietwagen",
+      "fahrzeug mieten",
+      "transporter mieten",
+      "bus mieten",
+      "vermietung",
+    ],
+  },
+  {
+    label: "Leasing",
+    keywords: [
+      "leasing",
+      "auto leasing",
+      "fahrzeug leasing",
+      "finanzierung",
+      "rate",
+      "neuwagen leasing",
+      "occasion leasing",
+    ],
+  },
+  {
+    label: "Motorrad",
+    keywords: [
+      "motorrad",
+      "töff",
+      "toeff",
+      "motorradwerkstatt",
+      "motorrad kaufen",
+      "roller",
+      "scooter",
+      "motorradservice",
+    ],
+  },
+  {
+    label: "Nutzfahrzeuge",
+    keywords: [
+      "nutzfahrzeuge",
+      "lieferwagen",
+      "transporter",
+      "camion",
+      "lastwagen",
+      "flotte",
+      "gewerbefahrzeuge",
+      "fahrzeugservice",
+    ],
+  },
+  {
+    label: "Landmaschinen",
+    keywords: [
+      "landmaschinen",
+      "traktor",
+      "traktoren",
+      "landtechnik",
+      "maschinenservice",
+      "landwirtschaft maschinen",
+      "mähmaschine",
+      "maehmaschine",
+    ],
+  },
+
+  {
+    label: "Beauty, Gesundheit & Wohlbefinden",
+    keywords: [
+      "beauty",
+      "gesundheit",
+      "wohlbefinden",
+      "pflege",
+      "kosmetik",
+      "therapie",
+      "fitness",
+      "massage",
+      "praxis",
+      "wellness",
+    ],
+  },
+  {
+    label: "Coiffeur",
+    keywords: [
+      "coiffeur",
+      "friseur",
+      "haarschnitt",
+      "haare",
+      "färben",
+      "faerben",
+      "styling",
+      "damenhaarschnitt",
+      "herrenhaarschnitt",
+    ],
+  },
+  {
+    label: "Barbershop",
+    keywords: [
+      "barbershop",
+      "barber",
+      "bart",
+      "herrenfriseur",
+      "rasur",
+      "haarschnitt männer",
+      "haarschnitt maenner",
+      "beard trim",
+    ],
+  },
+  {
+    label: "Kosmetikstudio",
+    keywords: [
+      "kosmetikstudio",
+      "kosmetik",
+      "gesichtsbehandlung",
+      "beauty",
+      "make up",
+      "hautpflege",
+      "wimpern",
+      "augenbrauen",
+    ],
+  },
+  {
+    label: "Nagelstudio",
+    keywords: [
+      "nagelstudio",
+      "nägel",
+      "naegel",
+      "manicure",
+      "pedicure",
+      "gelnägel",
+      "gelnaegel",
+      "naildesign",
+      "fusspflege",
+    ],
+  },
+  {
+    label: "Massage",
+    keywords: [
+      "massage",
+      "massagetherapie",
+      "rückenmassage",
+      "rueckenmassage",
+      "sportmassage",
+      "entspannung",
+      "wellness",
+      "therapie",
+    ],
+  },
+  {
+    label: "Physiotherapie",
+    keywords: [
+      "physiotherapie",
+      "physio",
+      "rehabilitation",
+      "rückenschmerzen",
+      "rueckenschmerzen",
+      "therapie",
+      "bewegung",
+      "training",
+    ],
+  },
+  {
+    label: "Osteopathie",
+    keywords: [
+      "osteopathie",
+      "osteopath",
+      "körpertherapie",
+      "koerpertherapie",
+      "schmerzen",
+      "beweglichkeit",
+      "manuelle therapie",
+    ],
+  },
+  {
+    label: "Podologie",
+    keywords: [
+      "podologie",
+      "fusspflege",
+      "medizinische fusspflege",
+      "fussbehandlung",
+      "nägel",
+      "naegel",
+      "hornhaut",
+    ],
+  },
+  {
+    label: "Zahnarzt",
+    keywords: [
+      "zahnarzt",
+      "zahnarztpraxis",
+      "zähne",
+      "zaehne",
+      "zahnreinigung",
+      "kontrolle",
+      "dentalhygiene",
+      "notfall zahnarzt",
+    ],
+  },
+  {
+    label: "Arztpraxis",
+    keywords: [
+      "arztpraxis",
+      "arzt",
+      "hausarzt",
+      "medizin",
+      "sprechstunde",
+      "praxis",
+      "untersuchung",
+      "gesundheit",
+    ],
+  },
+  {
+    label: "Apotheke",
+    keywords: [
+      "apotheke",
+      "medikamente",
+      "rezept",
+      "beratung",
+      "gesundheit",
+      "notfallapotheke",
+      "drogerie",
+    ],
+  },
+  {
+    label: "Fitnesscenter",
+    keywords: [
+      "fitnesscenter",
+      "fitness",
+      "gym",
+      "training",
+      "krafttraining",
+      "cardio",
+      "kurse",
+      "studio",
+    ],
+  },
+  {
+    label: "Personal Training",
+    keywords: [
+      "personal training",
+      "personal trainer",
+      "fitness coach",
+      "training",
+      "coaching",
+      "krafttraining",
+      "abnehmen",
+      "bewegung",
+    ],
+  },
+  {
+    label: "Ernährungsberatung",
+    keywords: [
+      "ernährungsberatung",
+      "ernaehrungsberatung",
+      "ernährung",
+      "ernaehrung",
+      "abnehmen",
+      "diät",
+      "diaet",
+      "gesund essen",
+      "beratung",
+    ],
+  },
+
+  {
+    label: "Gastro, Lebensmittel & Genuss",
+    keywords: [
+      "gastro",
+      "gastronomie",
+      "lebensmittel",
+      "genuss",
+      "essen",
+      "trinken",
+      "restaurant",
+      "café",
+      "cafe",
+      "bäckerei",
+      "baeckerei",
+      "konditorei",
+      "take away",
+      "catering",
+    ],
+  },
+  {
+    label: "Restaurant",
+    keywords: [
+      "restaurant",
+      "essen",
+      "mittagessen",
+      "abendessen",
+      "küche",
+      "kueche",
+      "menü",
+      "menue",
+      "gastronomie",
+      "beiz",
+      "lokal",
+    ],
+  },
+  {
+    label: "Pizzeria",
+    keywords: [
+      "pizzeria",
+      "pizza",
+      "italienisch",
+      "pasta",
+      "take away pizza",
+      "pizza bestellen",
+      "restaurant",
+    ],
+  },
+  {
+    label: "Take-away",
+    keywords: [
+      "take-away",
+      "take away",
+      "takeaway",
+      "essen mitnehmen",
+      "imbiss",
+      "snack",
+      "lieferdienst essen",
+      "food",
+    ],
+  },
+  {
+    label: "Café",
+    keywords: [
+      "café",
+      "cafe",
+      "kaffee",
+      "espresso",
+      "tee",
+      "kuchen",
+      "brunch",
+      "frühstück",
+      "fruehstueck",
+      "bistro",
+    ],
+  },
+  {
+    label: "Bäckerei",
+    keywords: [
+      "bäckerei",
+      "baeckerei",
+      "brot",
+      "brötchen",
+      "broetchen",
+      "gipfeli",
+      "gebäck",
+      "gebaeck",
+      "sandwich",
+      "confiserie",
+    ],
+  },
+  {
+    label: "Konditorei",
+    keywords: [
+      "konditorei",
+      "torten",
+      "kuchen",
+      "patisserie",
+      "dessert",
+      "süsses",
+      "suesses",
+      "confiserie",
+      "gebäck",
+      "gebaeck",
+    ],
+  },
+  {
+    label: "Metzgerei",
+    keywords: [
+      "metzgerei",
+      "metzger",
+      "fleisch",
+      "wurst",
+      "charcuterie",
+      "grillfleisch",
+      "aufschnitt",
+      "regional fleisch",
+    ],
+  },
+  {
+    label: "Käserei",
+    keywords: [
+      "käserei",
+      "kaeserei",
+      "käse",
+      "kaese",
+      "milchprodukte",
+      "fondue",
+      "raclette",
+      "regionaler käse",
+      "regionaler kaese",
+    ],
+  },
+  {
+    label: "Hofladen",
+    keywords: [
+      "hofladen",
+      "bauernhofladen",
+      "regional",
+      "lokal",
+      "frisch",
+      "gemüse",
+      "gemuese",
+      "früchte",
+      "fruechte",
+      "eier",
+      "direkt vom hof",
+    ],
+  },
+  {
+    label: "Lebensmittelgeschäft",
+    keywords: [
+      "lebensmittelgeschäft",
+      "lebensmittelgeschaeft",
+      "lebensmittel",
+      "laden",
+      "supermarkt",
+      "mini market",
+      "einkaufen",
+      "food",
+      "getränke",
+      "getraenke",
+    ],
+  },
+  {
+    label: "Getränkemarkt",
+    keywords: [
+      "getränkemarkt",
+      "getraenkemarkt",
+      "getränke",
+      "getraenke",
+      "wasser",
+      "bier",
+      "wein",
+      "softdrinks",
+      "mineral",
+    ],
+  },
+  {
+    label: "Catering",
+    keywords: [
+      "catering",
+      "partyservice",
+      "apéro",
+      "apero",
+      "buffet",
+      "event catering",
+      "essen liefern",
+      "fingerfood",
+      "bankett",
+    ],
+  },
+  {
+    label: "Foodtruck",
+    keywords: [
+      "foodtruck",
+      "food truck",
+      "streetfood",
+      "mobiles essen",
+      "imbisswagen",
+      "event food",
+      "burger",
+      "tacos",
+    ],
+  },
+  {
+    label: "Bar & Lounge",
+    keywords: [
+      "bar",
+      "lounge",
+      "cocktail",
+      "drinks",
+      "ausgang",
+      "nachtleben",
+      "apéro",
+      "apero",
+      "bier",
+      "wein",
+    ],
+  },
+
+  {
+    label: "Immobilien, Wohnen & Reinigung",
+    keywords: [
+      "immobilien",
+      "wohnen",
+      "reinigung",
+      "haus",
+      "wohnung",
+      "umzug",
+      "verwaltung",
+      "hauswartung",
+      "innenausbau",
+      "schlüssel",
+      "schluessel",
+    ],
+  },
+  {
+    label: "Immobilienmakler",
+    keywords: [
+      "immobilienmakler",
+      "makler",
+      "immobilien verkaufen",
+      "haus verkaufen",
+      "wohnung verkaufen",
+      "immobilien kaufen",
+      "bewertung",
+    ],
+  },
+  {
+    label: "Immobilienverwaltung",
+    keywords: [
+      "immobilienverwaltung",
+      "verwaltung",
+      "liegenschaftsverwaltung",
+      "mietverwaltung",
+      "stockwerkeigentum",
+      "bewirtschaftung",
+    ],
+  },
+  {
+    label: "Hauswartung",
+    keywords: [
+      "hauswartung",
+      "hauswart",
+      "hausdienst",
+      "liegenschaftsunterhalt",
+      "gebäudeunterhalt",
+      "gebaeudeunterhalt",
+      "reinigung",
+      "winterdienst",
+    ],
+  },
+  {
+    label: "Umzugsfirma",
+    keywords: [
+      "umzugsfirma",
+      "umzug",
+      "zügeln",
+      "zuegeln",
+      "möbeltransport",
+      "moebeltransport",
+      "umzugshilfe",
+      "transport",
+    ],
+  },
+  {
+    label: "Reinigungsfirma",
+    keywords: [
+      "reinigungsfirma",
+      "reinigung",
+      "putzen",
+      "wohnungsreinigung",
+      "büroreinigung",
+      "bueroreinigung",
+      "unterhaltsreinigung",
+      "cleaning",
+    ],
+  },
+  {
+    label: "Endreinigung",
+    keywords: [
+      "endreinigung",
+      "umzugsreinigung",
+      "abgabereinigung",
+      "wohnungsabgabe",
+      "reinigung mit abnahmegarantie",
+      "abnahmegarantie",
+    ],
+  },
+  {
+    label: "Gebäudereinigung",
+    keywords: [
+      "gebäudereinigung",
+      "gebaeudereinigung",
+      "fassadenreinigung",
+      "treppenhausreinigung",
+      "büroreinigung",
+      "bueroreinigung",
+      "unterhaltsreinigung",
+    ],
+  },
+  {
+    label: "Teppichreinigung",
+    keywords: [
+      "teppichreinigung",
+      "teppich reinigen",
+      "polsterreinigung",
+      "sofareinigung",
+      "textilreinigung",
+      "flecken entfernen",
+    ],
+  },
+  {
+    label: "Möbelhaus",
+    keywords: [
+      "möbelhaus",
+      "moebelhaus",
+      "möbel",
+      "moebel",
+      "einrichtung",
+      "sofa",
+      "bett",
+      "tisch",
+      "wohnzimmer",
+      "schrank",
+    ],
+  },
+  {
+    label: "Innenausbau",
+    keywords: [
+      "innenausbau",
+      "ausbau",
+      "umbau innen",
+      "trockenbau",
+      "renovation",
+      "schreiner",
+      "wände",
+      "waende",
+      "decken",
+    ],
+  },
+  {
+    label: "Küchenbau",
+    keywords: [
+      "küchenbau",
+      "kuechenbau",
+      "küche",
+      "kueche",
+      "einbauküche",
+      "einbaukueche",
+      "küchenumbau",
+      "kuechenumbau",
+      "arbeitsplatte",
+    ],
+  },
+  {
+    label: "Badumbau",
+    keywords: [
+      "badumbau",
+      "bad",
+      "badsanierung",
+      "dusche",
+      "wc",
+      "lavabo",
+      "plattenleger",
+      "sanitär",
+      "sanitaer",
+    ],
+  },
+  {
+    label: "Sicherheitstechnik",
+    keywords: [
+      "sicherheitstechnik",
+      "alarm",
+      "alarmanlage",
+      "videoüberwachung",
+      "videoueberwachung",
+      "zutritt",
+      "einbruchschutz",
+      "kamera",
+    ],
+  },
+  {
+    label: "Schlüsseldienst",
+    keywords: [
+      "schlüsseldienst",
+      "schluesseldienst",
+      "schlüssel",
+      "schluessel",
+      "türöffnung",
+      "tueroeffnung",
+      "ausgesperrt",
+      "zylinder",
+      "notöffnung",
+      "notoeffnung",
+    ],
+  },
+
+  {
+    label: "Transport, Logistik & Entsorgung",
+    keywords: [
+      "transport",
+      "logistik",
+      "entsorgung",
+      "lieferung",
+      "kurier",
+      "taxi",
+      "räumung",
+      "raeumung",
+      "recycling",
+      "lager",
+      "umzug",
+    ],
+  },
+  {
+    label: "Transportfirma",
+    keywords: [
+      "transportfirma",
+      "transport",
+      "warentransport",
+      "möbeltransport",
+      "moebeltransport",
+      "lieferung",
+      "logistik",
+      "lastwagen",
+    ],
+  },
+  {
+    label: "Kurierdienst",
+    keywords: [
+      "kurierdienst",
+      "kurier",
+      "express",
+      "same day",
+      "lieferung",
+      "paket",
+      "dokumente",
+      "schnelltransport",
+    ],
+  },
+  {
+    label: "Lieferdienst",
+    keywords: [
+      "lieferdienst",
+      "lieferung",
+      "bringdienst",
+      "zustellung",
+      "heimlieferung",
+      "essen liefern",
+      "waren liefern",
+    ],
+  },
+  {
+    label: "Taxi",
+    keywords: [
+      "taxi",
+      "taxidienst",
+      "fahrdienst",
+      "transfer",
+      "flughafen transfer",
+      "personentransport",
+      "shuttle",
+    ],
+  },
+  {
+    label: "Carreisen",
+    keywords: [
+      "carreisen",
+      "busreisen",
+      "reisecar",
+      "carfahrt",
+      "gruppenreise",
+      "ausflug",
+      "vereinsreise",
+    ],
+  },
+  {
+    label: "Umzugstransport",
+    keywords: [
+      "umzugstransport",
+      "umzug",
+      "zügeltransport",
+      "zuegeltransport",
+      "möbeltransport",
+      "moebeltransport",
+      "transport",
+    ],
+  },
+  {
+    label: "Lagerraum",
+    keywords: [
+      "lagerraum",
+      "lager",
+      "self storage",
+      "einlagerung",
+      "lagerbox",
+      "möbel einlagern",
+      "moebel einlagern",
+    ],
+  },
+  {
+    label: "Entsorgung",
+    keywords: [
+      "entsorgung",
+      "abfall",
+      "sperrgut",
+      "bauschutt",
+      "grüngut",
+      "gruengut",
+      "räumung",
+      "raeumung",
+      "recycling",
+    ],
+  },
+  {
+    label: "Recycling",
+    keywords: [
+      "recycling",
+      "wiederverwertung",
+      "entsorgung",
+      "altmetall",
+      "papier",
+      "karton",
+      "elektroschrott",
+      "wertstoffe",
+    ],
+  },
+  {
+    label: "Räumung",
+    keywords: [
+      "räumung",
+      "raeumung",
+      "hausräumung",
+      "hausraeumung",
+      "wohnungsräumung",
+      "wohnungsraeumung",
+      "entrümpelung",
+      "entruempelung",
+      "entsorgung",
+    ],
+  },
+  {
+    label: "Muldenvermietung",
+    keywords: [
+      "muldenvermietung",
+      "mulde mieten",
+      "muldenservice",
+      "container",
+      "entsorgung",
+      "bauschutt",
+      "abfallmulde",
+    ],
+  },
+  {
+    label: "Baumaschinen Transport",
+    keywords: [
+      "baumaschinen transport",
+      "baumaschinen",
+      "maschinentransport",
+      "bagger transport",
+      "schwertransport",
+      "tieflader",
+    ],
+  },
+  {
+    label: "Paketdienst",
+    keywords: [
+      "paketdienst",
+      "paket",
+      "pakete",
+      "versand",
+      "zustellung",
+      "kurier",
+      "lieferung",
+    ],
+  },
+
+  {
+    label: "Dienstleistungen & Beratung",
+    keywords: [
+      "dienstleistungen",
+      "beratung",
+      "büro",
+      "buero",
+      "administration",
+      "business",
+      "agentur",
+      "marketing",
+      "treuhand",
+      "webdesign",
+      "it support",
+    ],
+  },
+  {
+    label: "Treuhand",
+    keywords: [
+      "treuhand",
+      "buchhaltung",
+      "abschluss",
+      "lohnbuchhaltung",
+      "steuererklärung",
+      "steuererklaerung",
+      "fiduciary",
+      "finanzen",
+    ],
+  },
+  {
+    label: "Steuerberatung",
+    keywords: [
+      "steuerberatung",
+      "steuern",
+      "steuererklärung",
+      "steuererklaerung",
+      "steuerberater",
+      "steueroptimierung",
+      "beratung",
+    ],
+  },
+  {
+    label: "Versicherung",
+    keywords: [
+      "versicherung",
+      "versicherungsberatung",
+      "krankenkasse",
+      "haftpflicht",
+      "hausrat",
+      "fahrzeugversicherung",
+      "vorsorge",
+    ],
+  },
+  {
+    label: "Anwalt",
+    keywords: [
+      "anwalt",
+      "rechtsanwalt",
+      "rechtsberatung",
+      "recht",
+      "vertrag",
+      "arbeitsrecht",
+      "familienrecht",
+      "jurist",
+    ],
+  },
+  {
+    label: "Notar",
+    keywords: [
+      "notar",
+      "notariat",
+      "beglaubigung",
+      "urkunde",
+      "erbrecht",
+      "vertrag",
+      "grundstück",
+      "grundstueck",
+    ],
+  },
+  {
+    label: "Unternehmensberatung",
+    keywords: [
+      "unternehmensberatung",
+      "business consulting",
+      "strategie",
+      "prozessberatung",
+      "gründung",
+      "gruendung",
+      "firma gründen",
+      "firma gruenden",
+    ],
+  },
+  {
+    label: "Marketingagentur",
+    keywords: [
+      "marketingagentur",
+      "marketing",
+      "werbung",
+      "online marketing",
+      "social media",
+      "seo",
+      "kampagne",
+      "branding",
+    ],
+  },
+  {
+    label: "Webdesign",
+    keywords: [
+      "webdesign",
+      "web design",
+      "website",
+      "webseite",
+      "homepage",
+      "wordpress",
+      "internetauftritt",
+      "ux design",
+    ],
+  },
+  {
+    label: "IT Support",
+    keywords: [
+      "it support",
+      "it",
+      "informatik",
+      "computerhilfe",
+      "pc support",
+      "netzwerk",
+      "server",
+      "software",
+      "hardware",
+      "helpdesk",
+    ],
+  },
+  {
+    label: "Cybersecurity",
+    keywords: [
+      "cybersecurity",
+      "cyber security",
+      "it sicherheit",
+      "datenschutz",
+      "firewall",
+      "security",
+      "netzwerksicherheit",
+      "backup",
+    ],
+  },
+  {
+    label: "Druckerei",
+    keywords: [
+      "druckerei",
+      "druck",
+      "flyer",
+      "visitenkarten",
+      "broschüren",
+      "broschueren",
+      "plakate",
+      "print",
+      "kopieren",
+    ],
+  },
+  {
+    label: "Fotograf",
+    keywords: [
+      "fotograf",
+      "fotografie",
+      "fotoshooting",
+      "portrait",
+      "hochzeitsfotograf",
+      "produktfotografie",
+      "eventfotografie",
+    ],
+  },
+  {
+    label: "Videoproduktion",
+    keywords: [
+      "videoproduktion",
+      "video",
+      "filmproduktion",
+      "imagefilm",
+      "werbevideo",
+      "eventvideo",
+      "schnitt",
+      "kamera",
+    ],
+  },
+  {
+    label: "Übersetzungen",
+    keywords: [
+      "übersetzungen",
+      "uebersetzungen",
+      "übersetzer",
+      "uebersetzer",
+      "dolmetscher",
+      "sprache",
+      "text übersetzen",
+      "text uebersetzen",
+    ],
+  },
+
+  {
+    label: "Detailhandel & Fachgeschäfte",
+    keywords: [
+      "detailhandel",
+      "fachgeschäft",
+      "fachgeschaeft",
+      "laden",
+      "shop",
+      "geschäft",
+      "geschaeft",
+      "einkaufen",
+      "retail",
+      "verkauf",
+    ],
+  },
+  {
+    label: "Modegeschäft",
+    keywords: [
+      "modegeschäft",
+      "modegeschaeft",
+      "mode",
+      "kleider",
+      "bekleidung",
+      "fashion",
+      "boutique",
+      "damenmode",
+      "herrenmode",
+    ],
+  },
+  {
+    label: "Schuhgeschäft",
+    keywords: [
+      "schuhgeschäft",
+      "schuhgeschaeft",
+      "schuhe",
+      "sneaker",
+      "wanderschuhe",
+      "kinderschuhe",
+      "schuhladen",
+    ],
+  },
+  {
+    label: "Sportgeschäft",
+    keywords: [
+      "sportgeschäft",
+      "sportgeschaeft",
+      "sportladen",
+      "sportartikel",
+      "fitnessartikel",
+      "outdoor",
+      "ausrüstung",
+      "ausruestung",
+    ],
+  },
+  {
+    label: "Velogeschäft",
+    keywords: [
+      "velogeschäft",
+      "velogeschaeft",
+      "velo",
+      "bike",
+      "fahrrad",
+      "e bike",
+      "veloreparatur",
+      "bike shop",
+    ],
+  },
+  {
+    label: "Elektronikgeschäft",
+    keywords: [
+      "elektronikgeschäft",
+      "elektronikgeschaeft",
+      "elektronik",
+      "computer",
+      "tv",
+      "audio",
+      "handy",
+      "smartphone",
+      "geräte",
+      "geraete",
+    ],
+  },
+  {
+    label: "Haushaltswaren",
+    keywords: [
+      "haushaltswaren",
+      "haushalt",
+      "küche",
+      "kueche",
+      "geschirr",
+      "pfannen",
+      "geräte",
+      "geraete",
+      "wohnen",
+    ],
+  },
+  {
+    label: "Blumenladen",
+    keywords: [
+      "blumenladen",
+      "blumen",
+      "floristik",
+      "strauss",
+      "blumenstrauss",
+      "pflanzen",
+      "geschenk",
+      "trauerfloristik",
+    ],
+  },
+  {
+    label: "Tierbedarf",
+    keywords: [
+      "tierbedarf",
+      "haustierbedarf",
+      "hundefutter",
+      "katzenfutter",
+      "tierfutter",
+      "zubehör tiere",
+      "zubehoer tiere",
+    ],
+  },
+  {
+    label: "Optiker",
+    keywords: [
+      "optiker",
+      "brille",
+      "brillen",
+      "kontaktlinsen",
+      "sehtest",
+      "sonnenbrille",
+      "optik",
+    ],
+  },
+  {
+    label: "Uhren & Schmuck",
+    keywords: [
+      "uhren",
+      "schmuck",
+      "juwelier",
+      "ringe",
+      "kette",
+      "armband",
+      "uhr reparatur",
+      "gold",
+      "silber",
+    ],
+  },
+  {
+    label: "Spielwaren",
+    keywords: [
+      "spielwaren",
+      "spielzeug",
+      "spiele",
+      "kinder",
+      "lego",
+      "puppen",
+      "gesellschaftsspiele",
+      "geschenk",
+    ],
+  },
+  {
+    label: "Buchhandlung",
+    keywords: [
+      "buchhandlung",
+      "bücher",
+      "buecher",
+      "buchladen",
+      "romane",
+      "fachbücher",
+      "fachbuecher",
+      "lesen",
+    ],
+  },
+  {
+    label: "Drogerie",
+    keywords: [
+      "drogerie",
+      "pflege",
+      "kosmetik",
+      "gesundheit",
+      "naturheilmittel",
+      "haushalt",
+      "apotheke",
+    ],
+  },
+  {
+    label: "Geschenkladen",
+    keywords: [
+      "geschenkladen",
+      "geschenke",
+      "geschenkartikel",
+      "deko",
+      "souvenir",
+      "karten",
+      "ideen",
+    ],
+  },
+
+  {
+    label: "Freizeit, Events & Vereine",
+    keywords: [
+      "freizeit",
+      "events",
+      "veranstaltung",
+      "vereine",
+      "verein",
+      "kultur",
+      "sport",
+      "musik",
+      "reise",
+      "hotel",
+      "kinder",
+      "tiere",
+    ],
+  },
+  {
+    label: "Eventlocation",
+    keywords: [
+      "eventlocation",
+      "event location",
+      "veranstaltungsort",
+      "saal",
+      "halle",
+      "raum mieten",
+      "location",
+      "hochzeit",
+      "seminar",
+    ],
+  },
+  {
+    label: "Eventtechnik",
+    keywords: [
+      "eventtechnik",
+      "lichttechnik",
+      "tontechnik",
+      "sound",
+      "bühne",
+      "buehne",
+      "mikrofon",
+      "anlage",
+      "technik",
+    ],
+  },
+  {
+    label: "DJ",
+    keywords: [
+      "dj",
+      "deejay",
+      "musik",
+      "party",
+      "hochzeit dj",
+      "event dj",
+      "sound",
+      "tanzen",
+    ],
+  },
+  {
+    label: "Musikschule",
+    keywords: [
+      "musikschule",
+      "musikunterricht",
+      "instrument",
+      "klavier",
+      "gitarre",
+      "gesang",
+      "unterricht",
+    ],
+  },
+  {
+    label: "Tanzschule",
+    keywords: [
+      "tanzschule",
+      "tanzen",
+      "tanzkurs",
+      "salsa",
+      "hip hop",
+      "standardtanz",
+      "paartanz",
+    ],
+  },
+  {
+    label: "Sportverein",
+    keywords: [
+      "sportverein",
+      "verein",
+      "sport",
+      "training",
+      "fussball",
+      "turnen",
+      "tennis",
+      "volleyball",
+    ],
+  },
+  {
+    label: "Freizeitangebot",
+    keywords: [
+      "freizeitangebot",
+      "freizeit",
+      "aktivität",
+      "aktivitaet",
+      "ausflug",
+      "erlebnis",
+      "familie",
+      "indoor",
+      "outdoor",
+    ],
+  },
+  {
+    label: "Reisebüro",
+    keywords: [
+      "reisebüro",
+      "reisebuero",
+      "reisen",
+      "ferien",
+      "urlaub",
+      "flug",
+      "hotel buchen",
+      "pauschalreise",
+    ],
+  },
+  {
+    label: "Hotel",
+    keywords: [
+      "hotel",
+      "übernachten",
+      "uebernachten",
+      "zimmer",
+      "unterkunft",
+      "booking",
+      "restaurant hotel",
+      "seminarhotel",
+    ],
+  },
+  {
+    label: "Ferienwohnung",
+    keywords: [
+      "ferienwohnung",
+      "ferienhaus",
+      "apartment",
+      "unterkunft",
+      "übernachtung",
+      "uebernachtung",
+      "airbnb",
+    ],
+  },
+  {
+    label: "Camping",
+    keywords: [
+      "camping",
+      "campingplatz",
+      "zeltplatz",
+      "wohnmobil",
+      "camper",
+      "stellplatz",
+      "outdoor",
+    ],
+  },
+  {
+    label: "Kinderbetreuung",
+    keywords: [
+      "kinderbetreuung",
+      "kita",
+      "krippe",
+      "tagesmutter",
+      "hort",
+      "babysitter",
+      "betreuung kinder",
+    ],
+  },
+  {
+    label: "Hundeschule",
+    keywords: [
+      "hundeschule",
+      "hundetraining",
+      "hund",
+      "welpenkurs",
+      "erziehung",
+      "training hund",
+    ],
+  },
+  {
+    label: "Tierpension",
+    keywords: [
+      "tierpension",
+      "hundepension",
+      "katzenpension",
+      "tierbetreuung",
+      "ferienbetreuung tiere",
+      "haustiere",
+    ],
+  },
+
+  {
+    label: "Landwirtschaft & Regionales",
+    keywords: [
+      "landwirtschaft",
+      "regional",
+      "bauernhof",
+      "hofladen",
+      "landmaschinen",
+      "forst",
+      "holz",
+      "mosterei",
+      "winzer",
+      "imkerei",
+      "direktvermarktung",
+    ],
+  },
+  {
+    label: "Bauernhof",
+    keywords: [
+      "bauernhof",
+      "landwirtschaft",
+      "hof",
+      "tiere",
+      "regional",
+      "produkte vom hof",
+      "milch",
+      "eier",
+      "gemüse",
+      "gemuese",
+    ],
+  },
+  {
+    label: "Forstbetrieb",
+    keywords: [
+      "forstbetrieb",
+      "forst",
+      "wald",
+      "holz",
+      "baum fällen",
+      "baum faellen",
+      "holzerei",
+      "forstarbeiten",
+    ],
+  },
+  {
+    label: "Brennholz",
+    keywords: [
+      "brennholz",
+      "holz",
+      "cheminéeholz",
+      "chemineeholz",
+      "ofenholz",
+      "feuerholz",
+      "ster",
+      "holz liefern",
+    ],
+  },
+  {
+    label: "Mosterei",
+    keywords: [
+      "mosterei",
+      "most",
+      "apfelsaft",
+      "saft",
+      "obst",
+      "äpfel",
+      "aepfel",
+      "pressen",
+    ],
+  },
+  {
+    label: "Winzer",
+    keywords: [
+      "winzer",
+      "wein",
+      "weingut",
+      "rebberg",
+      "degustation",
+      "weinkeller",
+      "regionaler wein",
+    ],
+  },
+  {
+    label: "Gärtnerei",
+    keywords: [
+      "gärtnerei",
+      "gaertnerei",
+      "pflanzen",
+      "blumen",
+      "garten",
+      "setzlinge",
+      "topfpflanzen",
+      "stauden",
+    ],
+  },
+  {
+    label: "Baumschule",
+    keywords: [
+      "baumschule",
+      "bäume",
+      "baeume",
+      "sträucher",
+      "straeucher",
+      "pflanzen",
+      "hecken",
+      "obstbaum",
+    ],
+  },
+  {
+    label: "Imkerei",
+    keywords: [
+      "imkerei",
+      "imker",
+      "honig",
+      "bienen",
+      "bienenprodukte",
+      "regionaler honig",
+    ],
+  },
+  {
+    label: "Direktvermarktung",
+    keywords: [
+      "direktvermarktung",
+      "direkt vom hof",
+      "regional",
+      "lokal",
+      "hofprodukte",
+      "bauernmarkt",
+      "frisch",
+    ],
+  },
+  {
+    label: "Tierarzt",
+    keywords: [
+      "tierarzt",
+      "tierarztpraxis",
+      "veterinär",
+      "veterinaer",
+      "haustiere",
+      "notfall tierarzt",
+      "tiermedizin",
+    ],
+  },
+  {
+    label: "Pferdebetrieb",
+    keywords: [
+      "pferdebetrieb",
+      "pferde",
+      "reiten",
+      "reitstall",
+      "pensionstall",
+      "pferdepension",
+      "reitunterricht",
+    ],
+  },
+];
+
+function normalize(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function getNormalizedWords(value: string) {
+  return normalize(value)
+    .replace(/&/g, " und ")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function getComparableValue(value: string) {
+  return getNormalizedWords(value).join(" ");
+}
+
+function unique(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueItems: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+
+    if (!cleanValue) {
+      return;
+    }
+
+    const normalizedValue = getComparableValue(cleanValue);
+
+    if (!normalizedValue || seenValues.has(normalizedValue)) {
+      return;
+    }
+
+    seenValues.add(normalizedValue);
+    uniqueItems.push(cleanValue);
+  });
+
+  return uniqueItems;
+}
+
+function hasSameWords(label: string, taxonomyText: string) {
+  const labelWords = getNormalizedWords(label);
+  const taxonomyWords = getNormalizedWords(taxonomyText);
+
+  if (labelWords.length === 0 || taxonomyWords.length === 0) {
+    return false;
+  }
+
+  if (labelWords.length === 1) {
+    return taxonomyWords.includes(labelWords[0]);
+  }
+
+  if (taxonomyWords.length === 1) {
+    return false;
+  }
+
+  const labelWordSet = new Set(labelWords);
+  const taxonomyWordSet = new Set(taxonomyWords);
+
+  const labelContainsTaxonomy = taxonomyWords.every((word) =>
+    labelWordSet.has(word)
+  );
+
+  const taxonomyContainsLabel = labelWords.every((word) =>
+    taxonomyWordSet.has(word)
+  );
+
+  return labelContainsTaxonomy || taxonomyContainsLabel;
+}
+
+function labelMatchesTaxonomyText(label: string, taxonomyText: string) {
+  const normalizedLabel = getComparableValue(label);
+  const normalizedTaxonomyText = getComparableValue(taxonomyText);
+
+  if (!normalizedLabel || !normalizedTaxonomyText) {
+    return false;
+  }
+
+  if (normalizedLabel === normalizedTaxonomyText) {
+    return true;
+  }
+
+  return hasSameWords(label, taxonomyText);
+}
+
+function findMatchingEntries(labels: string[]) {
+  const cleanLabels = labels.map((label) => label.trim()).filter(Boolean);
+
+  return companySearchTaxonomy.filter((entry) => {
+    const searchableTexts = [entry.label, ...entry.keywords];
+
+    return cleanLabels.some((label) =>
+      searchableTexts.some((text) => labelMatchesTaxonomyText(label, text))
+    );
+  });
+}
+
+export function getAutomaticCompanySearchTerms({
+  mainCategory,
+  subCategories,
+  tags = [],
+}: {
+  mainCategory: string;
+  subCategories: string[];
+  tags?: string[];
+}) {
+  const labels = [mainCategory, ...subCategories, ...tags];
+  const matchingEntries = findMatchingEntries(labels);
+
+  return unique([
+    mainCategory,
+    ...subCategories,
+    ...tags,
+    ...matchingEntries.flatMap((entry) => entry.keywords),
+  ]).map((term) => term.toLowerCase());
+}
+
+export function getCompanySearchSuggestions({
+  mainCategory,
+  subCategories,
+  tags = [],
+}: {
+  mainCategory: string;
+  subCategories: string[];
+  tags?: string[];
+}) {
+  return getAutomaticCompanySearchTerms({
+    mainCategory,
+    subCategories,
+    tags,
+  }).slice(0, 80);
+}

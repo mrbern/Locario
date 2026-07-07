@@ -21,6 +21,7 @@ type CompanyInquiryFromDatabase = {
   phone: string | null;
   website: string | null;
   city: string;
+  address: string | null;
 
   desiredPlan: string;
 
@@ -55,12 +56,15 @@ type CompanyWithAd = {
   subCategories: string;
   category: string;
   city: string;
+  adress: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
   description: string;
   tags: string;
   searchTerms: string;
+  latitude: number | null;
+  longitude: number | null;
   ad: {
     title: string;
     description: string;
@@ -91,18 +95,24 @@ function parseJsonArray(value: string | null | undefined): string[] {
     const parsed = JSON.parse(value);
 
     if (Array.isArray(parsed)) {
-      return parsed.filter((item) => typeof item === "string");
+      return parsed
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean);
     }
 
     return [];
   } catch {
-    return [];
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
 }
 
 function mapCompany(company: CompanyWithAd) {
   const shouldShowAccessToken = canCompanyUsePartnerDashboard(company.plan);
   const shouldShowAd = canCompanyUseAdvertising(company.plan);
+  const address = company.adress ?? "";
 
   return {
     id: company.id,
@@ -115,12 +125,16 @@ function mapCompany(company: CompanyWithAd) {
     subCategories: parseJsonArray(company.subCategories),
     category: company.category,
     city: company.city,
+    address,
+    adress: address,
     phone: company.phone ?? "",
     email: company.email ?? "",
     website: company.website ?? "",
     description: company.description,
     tags: parseJsonArray(company.tags),
     searchTerms: parseJsonArray(company.searchTerms),
+    latitude: company.latitude,
+    longitude: company.longitude,
     ad:
       company.ad && shouldShowAd
         ? {
@@ -142,6 +156,7 @@ function mapCompanyInquiry(inquiry: CompanyInquiryFromDatabase) {
     phone: inquiry.phone ?? "",
     website: inquiry.website ?? "",
     city: inquiry.city,
+    address: inquiry.address ?? "",
 
     desiredPlan: inquiry.desiredPlan,
 
@@ -286,6 +301,7 @@ export async function POST(_request: Request, context: RouteContext) {
         category: primarySubCategory.trim(),
 
         city: inquiry.city.trim(),
+        adress: inquiry.address?.trim() || null,
         phone: inquiry.phone?.trim() || null,
         email: inquiry.email.trim(),
         website: inquiry.website?.trim() || null,

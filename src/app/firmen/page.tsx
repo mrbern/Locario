@@ -8,24 +8,158 @@ import {
   mainCategories,
 } from "@/data/categories";
 import { companies as demoCompanies } from "@/data/companies";
-import {
-  canCompanyUseAdvertising,
-  getCompanyPlanLabel,
-} from "@/data/plans";
+import { canCompanyUseAdvertising, getCompanyPlanLabel } from "@/data/plans";
 import type { Company } from "@/types/company";
 
-function normalizeText(value: string) {
-  return value
+type SafeCompany = Company & {
+  address?: string | null;
+  adress?: string | null;
+  companyName?: string | null;
+  title?: string | null;
+  tags?: unknown;
+  searchTerms?: unknown;
+  subCategories?: unknown;
+};
+
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
     .toLowerCase()
     .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
 }
 
+function normalizeTerm(value: string) {
+  return normalizeText(value);
+}
+
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => getSafeString(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => getSafeString(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function uniqueTerms(values: string[]) {
+  const seenTerms = new Set<string>();
+  const terms: string[] = [];
+
+  values.forEach((value) => {
+    const cleanedValue = value.trim();
+    const normalizedValue = normalizeTerm(cleanedValue);
+
+    if (!cleanedValue || seenTerms.has(normalizedValue)) {
+      return;
+    }
+
+    seenTerms.add(normalizedValue);
+    terms.push(cleanedValue);
+  });
+
+  return terms;
+}
+
+function getCompanyName(company: Company) {
+  const safeCompany = company as SafeCompany;
+
+  return (
+    getSafeString(company.name).trim() ||
+    getSafeString(safeCompany.companyName).trim() ||
+    getSafeString(safeCompany.title).trim() ||
+    "Unbenannte Firma"
+  );
+}
+
+function getCompanyId(company: Company, fallbackIndex: number) {
+  const safeId = String(company.id ?? "").trim();
+
+  if (safeId) {
+    return safeId;
+  }
+
+  return `company-${fallbackIndex}`;
+}
+
+function getCompanyAddress(company: Company) {
+  const safeCompany = company as SafeCompany;
+
+  return (
+    getSafeString(safeCompany.address).trim() ||
+    getSafeString(safeCompany.adress).trim()
+  );
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeText(value);
+  const normalizedCity = normalizeText(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getCompanyLocationLine(company: Company) {
+  const city = getSafeString(company.city).trim();
+  const address = getCompanyAddress(company);
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
 function getDisplayedSubCategories(company: Company) {
-  if (company.subCategories && company.subCategories.length > 0) {
-    return company.subCategories;
+  const safeCompany = company as SafeCompany;
+  const subCategories = uniqueTerms(getSafeStringArray(safeCompany.subCategories));
+
+  if (subCategories.length > 0) {
+    return subCategories;
   }
 
   if (company.subCategory) {
@@ -57,23 +191,30 @@ function shouldShowAdvertising(company: Company) {
 }
 
 function getCompanySearchText(company: Company) {
+  const safeCompany = company as SafeCompany;
   const mainCategory = getDisplayedMainCategory(company);
   const subCategories = getDisplayedSubCategories(company);
   const advertisingVisible = shouldShowAdvertising(company);
+  const tags = getSafeStringArray(safeCompany.tags);
+  const searchTerms = getSafeStringArray(safeCompany.searchTerms);
 
   return normalizeText(
     [
-      company.name,
+      getCompanyName(company),
       mainCategory,
       ...subCategories,
       company.category,
       company.city,
+      getCompanyAddress(company),
       company.description,
+      company.phone,
+      company.email,
+      company.website,
       advertisingVisible ? company.ad?.title ?? "" : "",
       advertisingVisible ? company.ad?.description ?? "" : "",
       advertisingVisible ? company.ad?.cta ?? "" : "",
-      ...company.tags,
-      ...company.searchTerms,
+      ...tags,
+      ...searchTerms,
     ].join(" ")
   );
 }
@@ -194,7 +335,9 @@ export default function CompaniesPage() {
 
         const matchesCity =
           !normalizedCityQuery ||
-          normalizeText(company.city).includes(normalizedCityQuery);
+          normalizeText([company.city, getCompanyAddress(company)].join(" ")).includes(
+            normalizedCityQuery
+          );
 
         return (
           matchesSearch &&
@@ -210,7 +353,7 @@ export default function CompaniesPage() {
           return planDifference;
         }
 
-        return a.name.localeCompare(b.name);
+        return getCompanyName(a).localeCompare(getCompanyName(b));
       });
   }, [
     allCompanies,
@@ -248,7 +391,7 @@ export default function CompaniesPage() {
   );
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-12rem] top-[-10rem] h-[32rem] w-[32rem] rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="absolute right-[-14rem] top-[10rem] h-[36rem] w-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
@@ -295,10 +438,7 @@ export default function CompaniesPage() {
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/30 backdrop-blur-xl">
             <div className="grid gap-4 sm:grid-cols-3">
-              <HeroStat
-                value={allCompanies.length.toString()}
-                label="Firmen"
-              />
+              <HeroStat value={allCompanies.length.toString()} label="Firmen" />
 
               <HeroStat
                 value={companiesWithAds.length.toString()}
@@ -317,8 +457,8 @@ export default function CompaniesPage() {
               </p>
 
               <p className="mt-2 text-sm text-slate-300">
-                Firmen werden mit Kategorie, Stadt, Suchbegriffen, Paket-Badge,
-                Titelbild und optionaler Werbeanzeige dargestellt.
+                Firmen werden mit Kategorie, Ort, Adresse, Suchbegriffen,
+                Paket-Badge, Titelbild und optionaler Werbeanzeige dargestellt.
               </p>
             </div>
           </div>
@@ -336,7 +476,8 @@ export default function CompaniesPage() {
               </h2>
 
               <p className="mt-2 text-slate-400">
-                Suche nach Firma, Angebot, Leistung, Kategorie oder Ort.
+                Suche nach Firma, Angebot, Leistung, Kategorie, Adresse oder
+                Ort.
               </p>
             </div>
 
@@ -381,10 +522,10 @@ export default function CompaniesPage() {
             />
 
             <InputField
-              label="Stadt / Region"
+              label="Ort / Adresse"
               value={cityQuery}
               onChange={setCityQuery}
-              placeholder="Zum Beispiel: Aarau"
+              placeholder="Zum Beispiel: Wattenwil"
             />
           </div>
 
@@ -464,7 +605,7 @@ export default function CompaniesPage() {
           <div className="mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {filteredCompanies.map((company, index) => (
               <CompanyCard
-                key={company.id}
+                key={getCompanyId(company, index)}
                 company={company}
                 index={index}
               />
@@ -503,17 +644,21 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
   const displayedSubCategories = getDisplayedSubCategories(company);
   const advertisingVisible = shouldShowAdvertising(company);
   const hasImage = companyHasImage(company);
+  const tags = uniqueTerms(getSafeStringArray((company as SafeCompany).tags));
+  const companyName = getCompanyName(company);
+  const companyId = getCompanyId(company, index);
+  const locationLine = getCompanyLocationLine(company);
 
   return (
     <Link
-      href={`/firmen/${company.id}`}
-      className="group overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.09]"
+      href={`/firmen/${companyId}`}
+      className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.09]"
     >
       <div className="relative h-44 overflow-hidden">
         {hasImage ? (
           <img
             src={company.imageUrl}
-            alt={company.name}
+            alt={companyName}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
@@ -525,13 +670,13 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
 
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-transparent" />
 
-        <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+        <div className="absolute bottom-5 left-5 right-5 flex flex-wrap gap-2">
           <span className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-sm font-bold text-cyan-100 backdrop-blur">
             {displayedMainCategory}
           </span>
 
           <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-200 backdrop-blur">
-            {company.city}
+            {company.city || "Ort offen"}
           </span>
         </div>
 
@@ -550,11 +695,11 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
         )}
       </div>
 
-      <div className="p-6">
+      <div className="flex flex-1 flex-col p-6">
         <div className="flex flex-wrap gap-2">
-          {displayedSubCategories.slice(0, 4).map((subCategory) => (
+          {displayedSubCategories.slice(0, 4).map((subCategory, tagIndex) => (
             <span
-              key={subCategory}
+              key={`${normalizeTerm(subCategory)}-${tagIndex}`}
               className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"
             >
               {subCategory}
@@ -568,12 +713,16 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
           )}
         </div>
 
-        <h2 className="mt-5 text-2xl font-black tracking-tight">
-          {company.name}
+        <h2 className="mt-5 break-words text-2xl font-black tracking-tight">
+          {companyName}
         </h2>
 
-        <p className="mt-4 line-clamp-4 text-slate-300">
-          {company.description}
+        <p className="mt-3 break-words text-sm font-semibold text-slate-400">
+          📍 {locationLine}
+        </p>
+
+        <p className="mt-4 line-clamp-4 break-words text-slate-300">
+          {company.description || "Noch keine Beschreibung vorhanden."}
         </p>
 
         {advertisingVisible && company.ad && (
@@ -582,9 +731,11 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
               Anzeige
             </p>
 
-            <h3 className="mt-2 font-black text-white">{company.ad.title}</h3>
+            <h3 className="mt-2 break-words font-black text-white">
+              {company.ad.title}
+            </h3>
 
-            <p className="mt-1 text-sm text-slate-300">
+            <p className="mt-1 break-words text-sm text-slate-300">
               {company.ad.description}
             </p>
 
@@ -594,19 +745,23 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
           </div>
         )}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          {company.tags.slice(0, 4).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-medium text-slate-300"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
+        {tags.length > 0 && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {tags.slice(0, 4).map((tag, tagIndex) => (
+              <span
+                key={`${normalizeTerm(tag)}-${tagIndex}`}
+                className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-medium text-slate-300"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
-        <div className="mt-6 inline-flex rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-950 transition group-hover:bg-cyan-300">
-          Firma ansehen
+        <div className="mt-auto pt-6">
+          <div className="inline-flex rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-950 transition group-hover:bg-cyan-300">
+            Firma ansehen
+          </div>
         </div>
       </div>
     </Link>
@@ -680,4 +835,3 @@ function SelectField({
     </div>
   );
 }
-

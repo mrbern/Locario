@@ -14,6 +14,10 @@ import {
   mainCategories,
 } from "@/data/categories";
 import {
+  getAutomaticCompanySearchTerms,
+  getCompanySearchSuggestions,
+} from "@/data/search-taxonomy";
+import {
   canCompanyReceiveLeads,
   canCompanyUseAdvertising,
   canCompanyUsePartnerDashboard,
@@ -32,14 +36,23 @@ type CompanyForm = {
   mainCategory: string;
   subCategories: string[];
   city: string;
+  address: string;
   phone: string;
   email: string;
   website: string;
   description: string;
   tags: string;
+  searchTerms: string;
   adTitle: string;
   adDescription: string;
   adCta: string;
+};
+
+type SafeCompany = Company & {
+  address?: string | null;
+  adress?: string | null;
+  companyName?: string | null;
+  title?: string | null;
 };
 
 const emptyForm: CompanyForm = {
@@ -49,17 +62,111 @@ const emptyForm: CompanyForm = {
   mainCategory: "",
   subCategories: [],
   city: "",
+  address: "",
   phone: "",
   email: "",
   website: "",
   description: "",
   tags: "",
+  searchTerms: "",
   adTitle: "",
   adDescription: "",
   adCta: "",
 };
 
 const companiesPerPage = 25;
+
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => getSafeString(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => getSafeString(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function getFormTerms(value: string) {
+  return value
+    .split(",")
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function normalizeTerm(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function uniqueTerms(values: string[]) {
+  const seenTerms = new Set<string>();
+  const terms: string[] = [];
+
+  values.forEach((value) => {
+    const cleanedValue = value.trim();
+    const normalizedValue = normalizeTerm(cleanedValue);
+
+    if (!cleanedValue || seenTerms.has(normalizedValue)) {
+      return;
+    }
+
+    seenTerms.add(normalizedValue);
+    terms.push(cleanedValue);
+  });
+
+  return terms;
+}
+
+function termsToText(values: string[]) {
+  return uniqueTerms(values).join(", ");
+}
+
+function getMergedTermsText(currentValue: string, termsToAdd: string[]) {
+  return termsToText([...getFormTerms(currentValue), ...termsToAdd]);
+}
 
 function getPlanClassName(plan: string | undefined) {
   if (plan === "starter") {
@@ -78,8 +185,10 @@ function getPlanClassName(plan: string | undefined) {
 }
 
 function getDisplayedSubCategories(company: Company) {
-  if (company.subCategories && company.subCategories.length > 0) {
-    return company.subCategories;
+  const subCategories = getSafeStringArray(company.subCategories);
+
+  if (subCategories.length > 0) {
+    return subCategories;
   }
 
   if (company.subCategory) {
@@ -106,18 +215,65 @@ function getDisplayedMainCategory(company: Company) {
   return inferredMainCategory || company.mainCategory || "Allgemein";
 }
 
+function getCompanyAddress(company: Company) {
+  const safeCompany = company as SafeCompany;
+
+  return (
+    getSafeString(safeCompany.address).trim() ||
+    getSafeString(safeCompany.adress).trim()
+  );
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeTerm(value);
+  const normalizedCity = normalizeTerm(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getCompanyLocationLine(company: Company) {
+  const city = getSafeString(company.city).trim();
+  const address = getCompanyAddress(company);
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
+function getExternalHref(value: string | null | undefined) {
+  const cleanValue = value?.trim();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  if (cleanValue.startsWith("http://") || cleanValue.startsWith("https://")) {
+    return cleanValue;
+  }
+
+  return `https://${cleanValue}`;
+}
+
 function getCompanySearchText(company: Company) {
   return [
     company.name,
     company.plan,
     company.city,
+    getCompanyAddress(company),
+    getCompanyLocationLine(company),
     company.mainCategory,
     company.subCategory,
     company.category,
     company.description,
     ...getDisplayedSubCategories(company),
-    ...company.tags,
-    ...company.searchTerms,
+    ...getSafeStringArray(company.tags),
+    ...getSafeStringArray(company.searchTerms),
     company.email,
     company.phone,
     company.website,
@@ -193,6 +349,20 @@ export default function AdminCompaniesPage() {
     return [...baseSubCategories, ...customSelectedSubCategories];
   }, [form.mainCategory, form.subCategories]);
 
+  const automaticSearchSuggestions = useMemo(() => {
+    return uniqueTerms(
+      getCompanySearchSuggestions({
+        mainCategory: form.mainCategory,
+        subCategories: form.subCategories,
+        tags: getFormTerms(form.tags),
+      })
+    );
+  }, [form.mainCategory, form.subCategories, form.tags]);
+
+  const selectedSearchTerms = useMemo(() => {
+    return uniqueTerms(getFormTerms(form.searchTerms)).map(normalizeTerm);
+  }, [form.searchTerms]);
+
   const filteredCompanies = useMemo(() => {
     const normalizedSearchQuery = companySearchQuery.trim().toLowerCase();
 
@@ -219,7 +389,9 @@ export default function AdminCompaniesPage() {
         return matchesSearch && matchesPlan && matchesVisibility;
       })
       .sort((firstCompany, secondCompany) =>
-        firstCompany.name.localeCompare(secondCompany.name)
+        getSafeString(firstCompany.name).localeCompare(
+          getSafeString(secondCompany.name)
+        )
       );
   }, [
     companies,
@@ -327,6 +499,23 @@ export default function AdminCompaniesPage() {
         subCategories: [...currentForm.subCategories, subCategory],
       };
     });
+  }
+
+  function applyAutomaticSearchSuggestions() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      searchTerms: getMergedTermsText(
+        currentForm.searchTerms,
+        automaticSearchSuggestions
+      ),
+    }));
+  }
+
+  function addSearchSuggestion(term: string) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      searchTerms: getMergedTermsText(currentForm.searchTerms, [term]),
+    }));
   }
 
   function resetFilters() {
@@ -438,7 +627,7 @@ export default function AdminCompaniesPage() {
   function openEditDrawer(company: Company) {
     const existingSubCategories =
       company.subCategories && company.subCategories.length > 0
-        ? company.subCategories
+        ? getSafeStringArray(company.subCategories)
         : [company.subCategory || company.category].filter(Boolean);
 
     const fallbackMainCategory =
@@ -451,17 +640,19 @@ export default function AdminCompaniesPage() {
     setDrawerMode("edit");
 
     setForm({
-      name: company.name,
-      imageUrl: company.imageUrl || "",
-      plan: company.plan || "pilot",
+      name: getSafeString(company.name),
+      imageUrl: getSafeString(company.imageUrl),
+      plan: getSafeString(company.plan, "pilot") || "pilot",
       mainCategory: fallbackMainCategory,
       subCategories: existingSubCategories,
-      city: company.city,
-      phone: company.phone,
-      email: company.email,
-      website: company.website,
-      description: company.description,
-      tags: company.tags.join(", "),
+      city: getSafeString(company.city),
+      address: getCompanyAddress(company),
+      phone: getSafeString(company.phone),
+      email: getSafeString(company.email),
+      website: getSafeString(company.website),
+      description: getSafeString(company.description),
+      tags: getSafeStringArray(company.tags).join(", "),
+      searchTerms: getSafeStringArray(company.searchTerms).join(", "),
       adTitle: canCompanyUseAdvertising(company.plan)
         ? company.ad?.title ?? ""
         : "",
@@ -494,18 +685,18 @@ export default function AdminCompaniesPage() {
       setSuccessMessage("");
       setErrorMessage("");
 
-      const tags = form.tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-
+      const tags = getFormTerms(form.tags);
       const primarySubCategory = form.subCategories[0];
 
-      const searchTerms = [
-        form.mainCategory.toLowerCase(),
-        ...form.subCategories.map((subCategory) => subCategory.toLowerCase()),
-        ...tags.map((tag) => tag.toLowerCase()),
-      ].filter(Boolean);
+      const editableSearchTerms = getFormTerms(form.searchTerms);
+      const fallbackSearchTerms = getAutomaticCompanySearchTerms({
+        mainCategory: form.mainCategory,
+        subCategories: form.subCategories,
+        tags,
+      });
+
+      const searchTerms =
+        editableSearchTerms.length > 0 ? editableSearchTerms : fallbackSearchTerms;
 
       const hasAd =
         canCompanyUseAdvertising(form.plan) &&
@@ -522,6 +713,7 @@ export default function AdminCompaniesPage() {
         subCategories: form.subCategories,
         category: primarySubCategory,
         city: form.city,
+        address: form.address,
         phone: form.phone,
         email: form.email,
         website: form.website,
@@ -667,8 +859,8 @@ export default function AdminCompaniesPage() {
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Neuer Ansatz: volle Tabellenansicht für viele Firmen. Details und
-            Bearbeitung öffnen sich separat im Drawer.
+            Firmen erfassen, Suchbegriffe automatisch vorschlagen, manuell
+            bearbeiten und die Trefferqualität von Locario gezielt verbessern.
           </p>
         </div>
 
@@ -721,12 +913,11 @@ export default function AdminCompaniesPage() {
               Datenbank
             </p>
 
-            <h2 className="mt-2 text-3xl font-black">
-              Firmenliste
-            </h2>
+            <h2 className="mt-2 text-3xl font-black">Firmenliste</h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Für grosse Datenmengen: kompakt, filterbar und mit Pagination.
+              Kompakt, filterbar und mit bearbeitbaren Suchbegriffen im
+              Hintergrund.
             </p>
           </div>
 
@@ -807,7 +998,7 @@ export default function AdminCompaniesPage() {
                 <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-black uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Firma</th>
-                    <th className="px-4 py-3">Ort</th>
+                    <th className="px-4 py-3">Ort / Adresse</th>
                     <th className="px-4 py-3">Paket</th>
                     <th className="px-4 py-3">Features</th>
                     <th className="px-4 py-3">Kontakt</th>
@@ -829,6 +1020,7 @@ export default function AdminCompaniesPage() {
                     const hasAdvertisingAccess = canCompanyUseAdvertising(
                       company.plan
                     );
+                    const companyLocationLine = getCompanyLocationLine(company);
 
                     return (
                       <tr
@@ -851,8 +1043,16 @@ export default function AdminCompaniesPage() {
                           </p>
                         </td>
 
-                        <td className="px-4 py-4 text-slate-300">
-                          {company.city}
+                        <td className="max-w-[22rem] px-4 py-4 text-slate-300">
+                          <p className="truncate font-semibold text-white">
+                            {companyLocationLine}
+                          </p>
+
+                          {company.city && companyLocationLine !== company.city && (
+                            <p className="mt-1 truncate text-xs text-slate-500">
+                              Stadt / Region: {company.city}
+                            </p>
+                          )}
                         </td>
 
                         <td className="px-4 py-4">
@@ -977,6 +1177,8 @@ export default function AdminCompaniesPage() {
         isSubmitting={isSubmitting}
         isUploadingImage={isUploadingImage}
         availableSubCategories={availableSubCategories}
+        automaticSearchSuggestions={automaticSearchSuggestions}
+        selectedSearchTerms={selectedSearchTerms}
         deletingCompanyId={deletingCompanyId}
         onClose={closeDrawer}
         onSubmit={handleSubmit}
@@ -984,6 +1186,8 @@ export default function AdminCompaniesPage() {
         onUpdatePlan={updatePlan}
         onUpdateMainCategory={updateMainCategory}
         onToggleSubCategory={toggleSubCategory}
+        onApplyAutomaticSearchSuggestions={applyAutomaticSearchSuggestions}
+        onAddSearchSuggestion={addSearchSuggestion}
         onUploadImage={uploadCompanyImage}
         onRemoveImage={removeCompanyImage}
         onEditCompany={openEditDrawer}
@@ -1002,6 +1206,8 @@ function CompanyDrawer({
   isSubmitting,
   isUploadingImage,
   availableSubCategories,
+  automaticSearchSuggestions,
+  selectedSearchTerms,
   deletingCompanyId,
   onClose,
   onSubmit,
@@ -1009,6 +1215,8 @@ function CompanyDrawer({
   onUpdatePlan,
   onUpdateMainCategory,
   onToggleSubCategory,
+  onApplyAutomaticSearchSuggestions,
+  onAddSearchSuggestion,
   onUploadImage,
   onRemoveImage,
   onEditCompany,
@@ -1022,6 +1230,8 @@ function CompanyDrawer({
   isSubmitting: boolean;
   isUploadingImage: boolean;
   availableSubCategories: string[];
+  automaticSearchSuggestions: string[];
+  selectedSearchTerms: string[];
   deletingCompanyId: string | null;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
@@ -1029,6 +1239,8 @@ function CompanyDrawer({
   onUpdatePlan: (value: string) => void;
   onUpdateMainCategory: (value: string) => void;
   onToggleSubCategory: (value: string) => void;
+  onApplyAutomaticSearchSuggestions: () => void;
+  onAddSearchSuggestion: (term: string) => void;
   onUploadImage: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage: () => void;
   onEditCompany: (company: Company) => void;
@@ -1061,8 +1273,8 @@ function CompanyDrawer({
 
               <p className="mt-3 max-w-2xl text-slate-400">
                 {isFormMode
-                  ? "Erfasse oder bearbeite alle wichtigen Firmendaten getrennt von der Tabelle."
-                  : "Details, Paketlogik, Kontakt und Aktionen zu dieser Firma."}
+                  ? "Kategorie wählen, Vorschläge übernehmen, Suchbegriffe direkt bearbeiten."
+                  : "Details, Paketlogik, Kontakt, Suchbegriffe und Aktionen zu dieser Firma."}
               </p>
             </div>
 
@@ -1147,6 +1359,13 @@ function CompanyDrawer({
                   required
                 />
 
+                <InputField
+                  label="Adresse"
+                  value={form.address}
+                  onChange={(value) => onUpdateField("address", value)}
+                  placeholder="Strasse, Hausnummer, PLZ Ort"
+                />
+
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
                   <InputField
                     label="Telefon"
@@ -1169,9 +1388,7 @@ function CompanyDrawer({
                   onChange={(value) => onUpdateField("website", value)}
                   placeholder="https://www.firma.ch"
                 />
-              </div>
 
-              <div className="space-y-5">
                 <TextareaField
                   label="Beschreibung"
                   value={form.description}
@@ -1180,13 +1397,23 @@ function CompanyDrawer({
                   required
                   rows={5}
                 />
+              </div>
 
+              <div className="space-y-5">
                 <InputField
-                  label="Suchbegriffe"
+                  label="Sichtbare Zusatzlabels"
                   value={form.tags}
                   onChange={(value) => onUpdateField("tags", value)}
-                  placeholder="Garage, Occasionen, Neuwagen, Lackiererei"
-                  required
+                  placeholder="Spezielle Marken, Leistungen, Produkte..."
+                />
+
+                <SearchTermsEditor
+                  value={form.searchTerms}
+                  suggestions={automaticSearchSuggestions}
+                  selectedTerms={selectedSearchTerms}
+                  onChange={(value) => onUpdateField("searchTerms", value)}
+                  onApplyAll={onApplyAutomaticSearchSuggestions}
+                  onAddTerm={onAddSearchSuggestion}
                 />
 
                 <AdFields
@@ -1245,9 +1472,13 @@ function CompanyDetailsDrawer({
   const displayedMainCategory = getDisplayedMainCategory(company);
   const displayedSubCategories = getDisplayedSubCategories(company);
   const partnerPath = getPartnerPath(company);
-  const partnerDashboardAllowed = canCompanyUsePartnerDashboard(company.plan);
   const leadsAllowed = canCompanyReceiveLeads(company.plan);
+  const partnerDashboardAllowed = canCompanyUsePartnerDashboard(company.plan);
   const advertisingAllowed = canCompanyUseAdvertising(company.plan);
+  const companyLocationLine = getCompanyLocationLine(company);
+  const websiteHref = getExternalHref(company.website);
+  const manualTerms = uniqueTerms(getSafeStringArray(company.tags));
+  const searchTerms = uniqueTerms(getSafeStringArray(company.searchTerms));
 
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
@@ -1297,9 +1528,9 @@ function CompanyDetailsDrawer({
               Öffentlich öffnen
             </Link>
 
-            {company.website && (
+            {websiteHref && (
               <a
-                href={company.website}
+                href={websiteHref}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
@@ -1340,10 +1571,12 @@ function CompanyDetailsDrawer({
         <h3 className="break-words text-4xl font-black">{company.name}</h3>
 
         <p className="text-slate-400">
-          {company.city} · {displayedMainCategory}
+          {companyLocationLine} · {displayedMainCategory}
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
+          <DetailBox title="Ort / Adresse" value={companyLocationLine} />
+
           <DetailBox title="Kategorie" value={displayedMainCategory} />
 
           <DetailBox
@@ -1385,6 +1618,24 @@ function CompanyDetailsDrawer({
           ) : (
             <DetailBox title="Werbung" value="Keine aktive Werbeanzeige." />
           )}
+
+          <DetailBox
+            title="Suchbegriffe"
+            value={
+              searchTerms.length > 0
+                ? searchTerms.slice(0, 30).join(", ")
+                : "Noch keine Suchbegriffe."
+            }
+          />
+
+          <DetailBox
+            title="Sichtbare Zusatzlabels"
+            value={
+              manualTerms.length > 0
+                ? manualTerms.join(", ")
+                : "Keine Zusatzlabels."
+            }
+          />
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -1397,11 +1648,30 @@ function CompanyDetailsDrawer({
           </p>
         </div>
 
-        {company.tags.length > 0 && (
+        {searchTerms.length > 0 && (
+          <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+            <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+              Suchlogik
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {searchTerms.slice(0, 80).map((term, termIndex) => (
+                <span
+                  key={`${normalizeTerm(term)}-${termIndex}`}
+                  className="rounded-full border border-cyan-300/20 bg-slate-950/50 px-3 py-1 text-xs text-cyan-100"
+                >
+                  {term}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {manualTerms.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {company.tags.map((tag) => (
+            {manualTerms.map((tag, tagIndex) => (
               <span
-                key={tag}
+                key={`${normalizeTerm(tag)}-${tagIndex}`}
                 className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
               >
                 {tag}
@@ -1487,6 +1757,100 @@ function InfoNotice({
     <div className={`rounded-3xl border p-4 ${className}`}>
       <p className="font-black">{title}</p>
       <p className="mt-2 text-sm text-slate-300">{description}</p>
+    </div>
+  );
+}
+
+function SearchTermsEditor({
+  value,
+  suggestions,
+  selectedTerms,
+  onChange,
+  onApplyAll,
+  onAddTerm,
+}: {
+  value: string;
+  suggestions: string[];
+  selectedTerms: string[];
+  onChange: (value: string) => void;
+  onApplyAll: () => void;
+  onAddTerm: (term: string) => void;
+}) {
+  const shownSuggestions = uniqueTerms(suggestions);
+
+  return (
+    <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h3 className="text-lg font-black text-cyan-100">
+            Suchbegriffe
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Diese Begriffe steuern die Suche. Du kannst sie direkt bearbeiten,
+            ergänzen oder einzelne Vorschläge anklicken.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onApplyAll}
+          disabled={shownSuggestions.length === 0}
+          className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Alle übernehmen
+        </button>
+      </div>
+
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="coiffeur, haare schneiden, bart schneiden, barber, balayage..."
+        rows={7}
+        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+      />
+
+      <p className="mt-2 text-xs text-slate-400">
+        Begriffe mit Komma trennen. Beispiel: haare schneiden, bart schneiden,
+        barber
+      </p>
+
+      {shownSuggestions.length === 0 && (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-400">
+          Wähle zuerst eine Hauptkategorie und Unterkategorie aus.
+        </p>
+      )}
+
+      {shownSuggestions.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+            Vorschläge
+          </p>
+
+          <div className="mt-3 flex max-h-56 flex-wrap gap-2 overflow-y-auto pr-1">
+            {shownSuggestions.map((term, termIndex) => {
+              const isSelected = selectedTerms.includes(normalizeTerm(term));
+
+              return (
+                <button
+                  key={`${normalizeTerm(term)}-${termIndex}`}
+                  type="button"
+                  onClick={() => onAddTerm(term)}
+                  disabled={isSelected}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed ${
+                    isSelected
+                      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                      : "border-cyan-300/20 bg-slate-950/60 text-cyan-100 hover:bg-cyan-300/10"
+                  }`}
+                >
+                  {isSelected ? "✓ " : "+ "}
+                  {term}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1864,12 +2228,12 @@ function MultiSelectField({
 
         {options.length > 0 && (
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-            {options.map((option) => {
+            {options.map((option, optionIndex) => {
               const isSelected = values.includes(option);
 
               return (
                 <button
-                  key={option}
+                  key={`${normalizeTerm(option)}-${optionIndex}`}
                   type="button"
                   disabled={disabled}
                   onClick={() => onToggle(option)}
@@ -1889,9 +2253,9 @@ function MultiSelectField({
 
         {values.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
-            {values.map((value) => (
+            {values.map((value, valueIndex) => (
               <span
-                key={value}
+                key={`${normalizeTerm(value)}-${valueIndex}`}
                 className="rounded-full bg-cyan-300 px-3 py-1 text-xs font-black text-slate-950"
               >
                 {value}

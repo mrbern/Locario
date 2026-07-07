@@ -22,12 +22,16 @@ model Company {
 
   category    String
   city        String
+  adress      String?
   phone       String?
   email       String?
   website     String?
   description String
   tags        String @default("[]")
   searchTerms String @default("[]")
+
+  latitude  Float?
+  longitude Float?
 
   ad    Advertisement?
   leads Lead[]
@@ -84,6 +88,7 @@ model CompanyInquiry {
   phone       String?
   website     String?
   city        String
+  address     String?
 
   desiredPlan String @default("starter")
 
@@ -121,8 +126,14 @@ model Event {
   locationName String?
   address      String?
 
+  latitude  Float?
+  longitude Float?
+
   description String
 
+  tags        String @default("[]")
+  searchTerms String @default("[]")
+  
   startsAt DateTime
   endsAt   DateTime?
 
@@ -151,6 +162,7 @@ model EventInquiry {
 
   category     String   @default("Sonstiges")
   locationName String?
+  address      String?
   eventDate    DateTime?
 
   description String @default("")

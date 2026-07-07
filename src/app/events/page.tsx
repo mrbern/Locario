@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import {
+  getEventPlanLabel,
+  getEventPlanRank,
+} from "@/data/event-plans";
 import type { LocarioEvent } from "@/types/event";
 
 const eventCategories = [
@@ -14,35 +18,75 @@ const eventCategories = [
   "Familie",
   "Kultur",
   "Gastronomie",
+  "Kurs",
+  "Gesundheit",
+  "Senioren",
+  "Jugend",
+  "Kirche",
+  "Dorf",
   "Sonstiges",
 ];
 
-function normalizeText(value: string) {
-  return value.toLowerCase().trim();
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
 }
 
-function getEventPlanLabel(plan: string | undefined) {
-  if (plan === "premium") {
-    return "Event Premium";
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => getSafeString(item).trim())
+      .filter(Boolean);
   }
 
-  if (plan === "highlight") {
-    return "Event Highlight";
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => getSafeString(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
   }
 
-  return "Event Basic";
+  return [];
 }
 
-function getEventPlanRank(plan: string | undefined) {
-  if (plan === "premium") {
-    return 3;
-  }
+function normalizeText(value: string | null | undefined) {
+  return String(value ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
 
-  if (plan === "highlight") {
-    return 2;
-  }
-
-  return 1;
+function eventHasImage(event: LocarioEvent) {
+  return Boolean(event.imageUrl && event.imageUrl.trim());
 }
 
 function getEventPlanClassName(plan: string | undefined) {
@@ -57,16 +101,28 @@ function getEventPlanClassName(plan: string | undefined) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
-function eventHasImage(event: LocarioEvent) {
-  return Boolean(event.imageUrl && event.imageUrl.trim());
+function parseValidDate(dateValue: string | null | undefined) {
+  if (!dateValue) {
+    return null;
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date;
 }
 
-function formatEventDate(dateValue: string) {
-  if (!dateValue) {
+function formatEventDate(dateValue: string | null | undefined) {
+  const date = parseValidDate(dateValue);
+
+  if (!date) {
     return "Datum offen";
   }
 
-  return new Date(dateValue).toLocaleDateString("de-CH", {
+  return date.toLocaleDateString("de-CH", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
@@ -74,19 +130,27 @@ function formatEventDate(dateValue: string) {
   });
 }
 
-function formatEventTime(dateValue: string) {
-  if (!dateValue) {
+function formatEventTime(dateValue: string | null | undefined) {
+  const date = parseValidDate(dateValue);
+
+  if (!date) {
     return "";
   }
 
-  return new Date(dateValue).toLocaleTimeString("de-CH", {
+  return date.toLocaleTimeString("de-CH", {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
 function isUpcomingEvent(event: LocarioEvent) {
-  return new Date(event.startsAt).getTime() >= new Date().setHours(0, 0, 0, 0);
+  const startDate = parseValidDate(event.startsAt);
+
+  if (!startDate) {
+    return false;
+  }
+
+  return startDate.getTime() >= new Date().setHours(0, 0, 0, 0);
 }
 
 function isHighlightedEvent(event: LocarioEvent) {
@@ -94,11 +158,56 @@ function isHighlightedEvent(event: LocarioEvent) {
     return true;
   }
 
-  if (!event.highlightUntil) {
+  const highlightUntil = parseValidDate(event.highlightUntil);
+
+  if (!highlightUntil) {
     return false;
   }
 
-  return new Date(event.highlightUntil).getTime() >= Date.now();
+  return highlightUntil.getTime() >= Date.now();
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeText(value);
+  const normalizedCity = normalizeText(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getEventLocationLine(event: LocarioEvent) {
+  const locationName = event.locationName?.trim() || "";
+  const address = event.address?.trim() || "";
+  const city = event.city?.trim() || "";
+
+  const parts = [locationName, address];
+
+  if (
+    city &&
+    !valueAlreadyContainsCity(locationName, city) &&
+    !valueAlreadyContainsCity(address, city)
+  ) {
+    parts.push(city);
+  }
+
+  return parts.filter(Boolean).join(", ") || "Ort offen";
+}
+
+function getExternalHref(value: string | null | undefined) {
+  const cleanValue = value?.trim();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  if (cleanValue.startsWith("http://") || cleanValue.startsWith("https://")) {
+    return cleanValue;
+  }
+
+  return `https://${cleanValue}`;
 }
 
 function getEventSearchText(event: LocarioEvent) {
@@ -110,8 +219,24 @@ function getEventSearchText(event: LocarioEvent) {
       event.city,
       event.locationName,
       event.address,
+      getEventLocationLine(event),
       event.description,
       event.plan,
+      event.website,
+      event.ticketUrl,
+      ...getSafeStringArray(event.tags),
+      ...getSafeStringArray(event.searchTerms),
+    ].join(" ")
+  );
+}
+
+function getCitySearchText(event: LocarioEvent) {
+  return normalizeText(
+    [
+      event.city,
+      event.locationName,
+      event.address,
+      getEventLocationLine(event),
     ].join(" ")
   );
 }
@@ -177,7 +302,7 @@ export default function EventsPage() {
 
         const matchesCity =
           !normalizedCityQuery ||
-          normalizeText(event.city).includes(normalizedCityQuery);
+          getCitySearchText(event).includes(normalizedCityQuery);
 
         return matchesSearch && matchesCategory && matchesCity;
       })
@@ -211,7 +336,7 @@ export default function EventsPage() {
   const hasActiveFilters = searchQuery || selectedCategory || cityQuery;
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-12rem] top-[-10rem] h-[32rem] w-[32rem] rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="absolute right-[-14rem] top-[10rem] h-[36rem] w-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
@@ -296,7 +421,7 @@ export default function EventsPage() {
               </h2>
 
               <p className="mt-2 text-slate-400">
-                Suche nach Event, Kategorie, Veranstalter oder Ort.
+                Suche nach Event, Kategorie, Veranstalter, Adresse oder Ort.
               </p>
             </div>
 
@@ -328,10 +453,10 @@ export default function EventsPage() {
             />
 
             <InputField
-              label="Stadt / Region"
+              label="Ort / Adresse"
               value={cityQuery}
               onChange={setCityQuery}
-              placeholder="Zum Beispiel: Bern"
+              placeholder="Zum Beispiel: Belp"
             />
           </div>
 
@@ -416,8 +541,28 @@ export default function EventsPage() {
               </h2>
 
               <p className="mt-4 text-slate-300">
-                Sobald Events im Admin erfasst werden, erscheinen sie hier.
+                Sobald passende Events im Admin erfasst werden, erscheinen sie
+                hier. Setze die Filter zurück oder bewirb ein neues Event.
               </p>
+
+              <div className="mt-6 flex flex-col gap-4 sm:flex-row">
+                {hasActiveFilters && (
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="rounded-3xl bg-white px-6 py-4 font-black text-slate-950 transition hover:bg-slate-200"
+                  >
+                    Filter zurücksetzen
+                  </button>
+                )}
+
+                <Link
+                  href="/fuer-firmen"
+                  className="rounded-3xl border border-white/15 px-6 py-4 text-center font-bold text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                >
+                  Event bewerben
+                </Link>
+              </div>
             </div>
           </div>
         )}
@@ -446,10 +591,13 @@ function EventCard({
   highlighted?: boolean;
 }) {
   const hasImage = eventHasImage(event);
+  const ticketHref = getExternalHref(event.ticketUrl);
+  const websiteHref = getExternalHref(event.website);
+  const locationLine = getEventLocationLine(event);
 
   return (
     <article
-      className={`group overflow-hidden rounded-[2rem] border shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 ${
+      className={`group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 ${
         highlighted
           ? "border-cyan-300/30 bg-cyan-300/10"
           : "border-white/10 bg-white/[0.06] hover:border-cyan-300/30 hover:bg-white/[0.09]"
@@ -483,52 +631,46 @@ function EventCard({
           {getEventPlanLabel(event.plan)}
         </div>
 
-        <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
+        <div className="absolute bottom-5 left-5 right-5 flex flex-wrap gap-2">
           <span className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-sm font-bold text-cyan-100 backdrop-blur">
-            {event.category}
+            {event.category || "Event"}
           </span>
 
           <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-200 backdrop-blur">
-            {event.city}
+            {event.city || "Ort offen"}
           </span>
         </div>
       </div>
 
-      <div className="p-6">
+      <div className="flex flex-1 flex-col p-6">
         <p className="text-sm font-bold text-cyan-200">
           {formatEventTime(event.startsAt)}
           {event.endsAt ? ` – ${formatEventTime(event.endsAt)}` : ""}
         </p>
 
-        <h2 className="mt-3 text-2xl font-black tracking-tight">
+        <h2 className="mt-3 break-words text-2xl font-black tracking-tight">
           {event.title}
         </h2>
 
-        <p className="mt-2 text-sm font-semibold text-slate-400">
-          {event.organizerName}
+        <p className="mt-2 break-words text-sm font-semibold text-slate-400">
+          {event.organizerName || "Veranstalter offen"}
         </p>
 
-        <p className="mt-4 line-clamp-4 text-slate-300">
-          {event.description}
+        <p className="mt-4 line-clamp-4 break-words text-slate-300">
+          {event.description || "Noch keine Beschreibung vorhanden."}
         </p>
 
-        {(event.locationName || event.address) && (
-          <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-400">
-              Ort
-            </p>
+        <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-400">
+            Ort
+          </p>
 
-            <p className="mt-2 text-sm font-semibold text-white">
-              {event.locationName || event.city}
-            </p>
+          <p className="mt-2 break-words text-sm font-semibold text-white">
+            {locationLine}
+          </p>
+        </div>
 
-            {event.address && (
-              <p className="mt-1 text-sm text-slate-400">{event.address}</p>
-            )}
-          </div>
-        )}
-
-        <div className="mt-6 grid gap-3">
+        <div className="mt-auto grid gap-3 pt-6">
           <Link
             href={`/events/${event.id}`}
             className="rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-cyan-300"
@@ -536,29 +678,31 @@ function EventCard({
             Details ansehen
           </Link>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            {event.ticketUrl && (
-              <a
-                href={event.ticketUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
-              >
-                Tickets
-              </a>
-            )}
+          {(ticketHref || websiteHref) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {ticketHref && (
+                <a
+                  href={ticketHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+                >
+                  Tickets
+                </a>
+              )}
 
-            {event.website && (
-              <a
-                href={event.website}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
-              >
-                Website
-              </a>
-            )}
-          </div>
+              {websiteHref && (
+                <a
+                  href={websiteHref}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                >
+                  Website
+                </a>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </article>
@@ -629,4 +773,3 @@ function SelectField({
     </div>
   );
 }
-

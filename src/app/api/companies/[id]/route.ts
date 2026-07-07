@@ -23,12 +23,16 @@ type CompanyRequestBody = {
 
   category?: string;
   city?: string;
+  address?: string;
+  adress?: string;
   phone?: string;
   email?: string;
   website?: string;
   description?: string;
   tags?: string[];
   searchTerms?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
   ad?: {
     title?: string;
     description?: string;
@@ -47,12 +51,17 @@ type CompanyWithAd = {
   subCategories: string;
   category: string;
   city: string;
+  adress: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
   description: string;
   tags: string;
   searchTerms: string;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt?: Date;
+  updatedAt?: Date;
   ad: {
     title: string;
     description: string;
@@ -90,6 +99,33 @@ function parseJsonArray(value: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function getRequestAddress(body: CompanyRequestBody, fallbackAddress = "") {
+  if (body.address !== undefined) {
+    return body.address.trim();
+  }
+
+  if (body.adress !== undefined) {
+    return body.adress.trim();
+  }
+
+  return fallbackAddress;
+}
+
+function getUpdatedCoordinate(
+  value: number | null | undefined,
+  fallbackValue: number | null
+) {
+  if (value === undefined) {
+    return fallbackValue;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  return null;
 }
 
 async function syncAccessTokenForPlan(company: CompanyWithAd) {
@@ -133,6 +169,7 @@ async function syncAccessTokenForPlan(company: CompanyWithAd) {
 function mapCompany(company: CompanyWithAd) {
   const parsedSubCategories = parseJsonArray(company.subCategories);
   const shouldShowAccessToken = canCompanyUsePartnerDashboard(company.plan);
+  const address = company.adress ?? "";
 
   return {
     id: company.id,
@@ -148,12 +185,16 @@ function mapCompany(company: CompanyWithAd) {
         : [company.subCategory].filter(Boolean),
     category: company.category,
     city: company.city,
+    address,
+    adress: address,
     phone: company.phone ?? "",
     email: company.email ?? "",
     website: company.website ?? "",
     description: company.description,
     tags: parseJsonArray(company.tags),
     searchTerms: parseJsonArray(company.searchTerms),
+    latitude: company.latitude,
+    longitude: company.longitude,
     ad:
       company.ad && canCompanyUseAdvertising(company.plan)
         ? {
@@ -254,6 +295,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const primarySubCategory = subCategories[0] || "Allgemein";
   const category = primarySubCategory;
+  const address = getRequestAddress(body, existingCompany.adress ?? "");
 
   if (
     !body.name ||
@@ -311,12 +353,15 @@ export async function PUT(request: Request, context: RouteContext) {
       subCategories: JSON.stringify(subCategories),
       category,
       city: body.city.trim(),
+      adress: address || null,
       phone: body.phone?.trim() || null,
       email: body.email?.trim() || null,
       website: body.website?.trim() || null,
       description: body.description.trim(),
       tags: JSON.stringify(tags),
       searchTerms: JSON.stringify(searchTerms),
+      latitude: getUpdatedCoordinate(body.latitude, existingCompany.latitude),
+      longitude: getUpdatedCoordinate(body.longitude, existingCompany.longitude),
     },
   });
 

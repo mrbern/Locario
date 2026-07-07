@@ -13,7 +13,13 @@ type EventRequestBody = {
   locationName?: string;
   address?: string;
 
+  latitude?: number | null;
+  longitude?: number | null;
+
   description?: string;
+
+  tags?: string[];
+  searchTerms?: string[];
 
   startsAt?: string;
   endsAt?: string;
@@ -49,6 +55,71 @@ function parseDate(value: string | undefined) {
   return date;
 }
 
+function getValidCoordinate(value: number | null | undefined) {
+  if (typeof value !== "number") {
+    return null;
+  }
+
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function getStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item.trim();
+      }
+
+      if (typeof item === "number" || typeof item === "boolean") {
+        return String(item).trim();
+      }
+
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function parseStoredStringArray(value: string | null) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => {
+          if (typeof item === "string") {
+            return item.trim();
+          }
+
+          if (typeof item === "number" || typeof item === "boolean") {
+            return String(item).trim();
+          }
+
+          return "";
+        })
+        .filter(Boolean);
+    }
+  } catch {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapEvent(event: {
   id: string;
   title: string;
@@ -59,7 +130,11 @@ function mapEvent(event: {
   city: string;
   locationName: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string;
+  tags: string;
+  searchTerms: string;
   startsAt: Date;
   endsAt: Date | null;
   website: string | null;
@@ -79,7 +154,11 @@ function mapEvent(event: {
     city: event.city,
     locationName: event.locationName ?? "",
     address: event.address ?? "",
+    latitude: event.latitude,
+    longitude: event.longitude,
     description: event.description,
+    tags: parseStoredStringArray(event.tags),
+    searchTerms: parseStoredStringArray(event.searchTerms),
     startsAt: event.startsAt.toISOString(),
     endsAt: event.endsAt?.toISOString() ?? "",
     website: event.website ?? "",
@@ -132,6 +211,9 @@ export async function POST(request: Request) {
     );
   }
 
+  const tags = getStringArray(body.tags);
+  const searchTerms = getStringArray(body.searchTerms);
+
   const event = await prisma.event.create({
     data: {
       title: body.title.trim(),
@@ -142,7 +224,11 @@ export async function POST(request: Request) {
       city: body.city.trim(),
       locationName: body.locationName?.trim() || null,
       address: body.address?.trim() || null,
+      latitude: getValidCoordinate(body.latitude),
+      longitude: getValidCoordinate(body.longitude),
       description: body.description.trim(),
+      tags: JSON.stringify(tags),
+      searchTerms: JSON.stringify(searchTerms),
       startsAt,
       endsAt,
       website: body.website?.trim() || null,
@@ -156,4 +242,3 @@ export async function POST(request: Request) {
     status: 201,
   });
 }
-

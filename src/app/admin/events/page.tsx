@@ -15,6 +15,10 @@ import {
   getEventPlanPrice,
   getEventPlanRank,
 } from "@/data/event-plans";
+import {
+  getAutomaticEventSearchTerms,
+  getEventSearchSuggestions,
+} from "@/data/event-search-taxonomy";
 import type { LocarioEvent } from "@/types/event";
 
 type DrawerMode = "closed" | "create" | "edit" | "details";
@@ -32,6 +36,9 @@ type EventForm = {
   address: string;
 
   description: string;
+
+  tags: string;
+  searchTerms: string;
 
   startsAt: string;
   endsAt: string;
@@ -55,6 +62,12 @@ const eventCategories = [
   "Familie",
   "Kultur",
   "Gastronomie",
+  "Kurs",
+  "Gesundheit",
+  "Senioren",
+  "Jugend",
+  "Kirche",
+  "Dorf",
   "Sonstiges",
 ];
 
@@ -72,6 +85,9 @@ const emptyForm: EventForm = {
 
   description: "",
 
+  tags: "",
+  searchTerms: "",
+
   startsAt: "",
   endsAt: "",
 
@@ -83,7 +99,105 @@ const emptyForm: EventForm = {
 };
 
 function normalizeText(value: string) {
-  return value.toLowerCase().trim();
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeTerm(value: string) {
+  return normalizeText(value);
+}
+
+function normalizeKey(value: string) {
+  return normalizeTerm(value)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => getSafeString(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => getSafeString(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function getFormTerms(value: string) {
+  return value
+    .split(",")
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function uniqueTerms(values: string[]) {
+  const seenTerms = new Set<string>();
+  const terms: string[] = [];
+
+  values.forEach((value) => {
+    const cleanedValue = value.trim();
+    const normalizedValue = normalizeTerm(cleanedValue);
+
+    if (!cleanedValue || seenTerms.has(normalizedValue)) {
+      return;
+    }
+
+    seenTerms.add(normalizedValue);
+    terms.push(cleanedValue);
+  });
+
+  return terms;
+}
+
+function termsToText(values: string[]) {
+  return uniqueTerms(values).join(", ");
+}
+
+function getMergedTermsText(currentValue: string, termsToAdd: string[]) {
+  return termsToText([...getFormTerms(currentValue), ...termsToAdd]);
 }
 
 function toInputDateTime(value: string | null | undefined) {
@@ -108,7 +222,13 @@ function formatDateTime(value: string | null | undefined) {
     return "Nicht gesetzt";
   }
 
-  return new Date(value).toLocaleString("de-CH", {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Nicht gesetzt";
+  }
+
+  return date.toLocaleString("de-CH", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
@@ -116,6 +236,49 @@ function formatDateTime(value: string | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeText(value);
+  const normalizedCity = normalizeText(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getEventLocationLine(event: LocarioEvent) {
+  const locationName = event.locationName?.trim() || "";
+  const address = event.address?.trim() || "";
+  const city = event.city?.trim() || "";
+
+  const parts = [locationName, address];
+
+  if (
+    city &&
+    !valueAlreadyContainsCity(locationName, city) &&
+    !valueAlreadyContainsCity(address, city)
+  ) {
+    parts.push(city);
+  }
+
+  return parts.filter(Boolean).join(", ") || "Nicht angegeben";
+}
+
+function getExternalHref(value: string | null | undefined) {
+  const cleanValue = value?.trim();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  if (cleanValue.startsWith("http://") || cleanValue.startsWith("https://")) {
+    return cleanValue;
+  }
+
+  return `https://${cleanValue}`;
 }
 
 function getEventSearchText(event: LocarioEvent) {
@@ -128,7 +291,10 @@ function getEventSearchText(event: LocarioEvent) {
       event.city,
       event.locationName,
       event.address,
+      getEventLocationLine(event),
       event.description,
+      ...getSafeStringArray(event.tags),
+      ...getSafeStringArray(event.searchTerms),
       event.website,
       event.ticketUrl,
     ].join(" ")
@@ -207,6 +373,19 @@ export default function AdminEventsPage() {
 
     return events.find((event) => event.id === selectedEventId) ?? null;
   }, [events, selectedEventId]);
+
+  const automaticSearchSuggestions = useMemo(() => {
+    return uniqueTerms(
+      getEventSearchSuggestions({
+        category: form.category,
+        tags: getFormTerms(form.tags),
+      })
+    );
+  }, [form.category, form.tags]);
+
+  const selectedSearchTerms = useMemo(() => {
+    return uniqueTerms(getFormTerms(form.searchTerms)).map(normalizeTerm);
+  }, [form.searchTerms]);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearchQuery = normalizeText(eventSearchQuery);
@@ -302,6 +481,23 @@ export default function AdminEventsPage() {
     }));
   }
 
+  function applyAutomaticSearchSuggestions() {
+    setForm((currentForm) => ({
+      ...currentForm,
+      searchTerms: getMergedTermsText(
+        currentForm.searchTerms,
+        automaticSearchSuggestions
+      ),
+    }));
+  }
+
+  function addSearchSuggestion(term: string) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      searchTerms: getMergedTermsText(currentForm.searchTerms, [term]),
+    }));
+  }
+
   function resetFilters() {
     setEventSearchQuery("");
     setSelectedPlanFilter("");
@@ -391,24 +587,27 @@ export default function AdminEventsPage() {
     setDrawerMode("edit");
 
     setForm({
-      title: event.title,
+      title: event.title || "",
       imageUrl: event.imageUrl || "",
 
-      organizerName: event.organizerName,
-      category: event.category,
+      organizerName: event.organizerName || "",
+      category: event.category || "",
       plan: event.plan || "basic",
 
-      city: event.city,
-      locationName: event.locationName,
-      address: event.address,
+      city: event.city || "",
+      locationName: event.locationName || "",
+      address: event.address || "",
 
-      description: event.description,
+      description: event.description || "",
+
+      tags: uniqueTerms(getSafeStringArray(event.tags)).join(", "),
+      searchTerms: uniqueTerms(getSafeStringArray(event.searchTerms)).join(", "),
 
       startsAt: toInputDateTime(event.startsAt),
       endsAt: toInputDateTime(event.endsAt),
 
-      website: event.website,
-      ticketUrl: event.ticketUrl,
+      website: event.website || "",
+      ticketUrl: event.ticketUrl || "",
 
       isActive: event.isActive,
       highlightUntil: toInputDateTime(event.highlightUntil),
@@ -432,6 +631,19 @@ export default function AdminEventsPage() {
       setSuccessMessage("");
       setErrorMessage("");
 
+      const tags = uniqueTerms(getFormTerms(form.tags));
+      const editableSearchTerms = uniqueTerms(getFormTerms(form.searchTerms));
+
+      const fallbackSearchTerms = uniqueTerms(
+        getAutomaticEventSearchTerms({
+          category: form.category,
+          tags,
+        })
+      );
+
+      const searchTerms =
+        editableSearchTerms.length > 0 ? editableSearchTerms : fallbackSearchTerms;
+
       const payload = {
         title: form.title,
         imageUrl: form.imageUrl,
@@ -445,6 +657,9 @@ export default function AdminEventsPage() {
         address: form.address,
 
         description: form.description,
+
+        tags,
+        searchTerms,
 
         startsAt: form.startsAt,
         endsAt: form.endsAt,
@@ -581,8 +796,8 @@ export default function AdminEventsPage() {
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Volle Admin-Breite für viele Events. Details und Bearbeitung öffnen
-            sich separat im Drawer.
+            Events erfassen, Suchbegriffe automatisch vorschlagen und manuell
+            bearbeiten.
           </p>
         </div>
 
@@ -638,7 +853,7 @@ export default function AdminEventsPage() {
             <h2 className="mt-2 text-3xl font-black">Eventliste</h2>
 
             <p className="mt-2 text-sm text-slate-400">
-              Kompakt, filterbar und für viele Events geeignet.
+              Kompakt, filterbar und mit Event-Suchlogik.
             </p>
           </div>
 
@@ -658,7 +873,7 @@ export default function AdminEventsPage() {
             label="Suche"
             value={eventSearchQuery}
             onChange={setEventSearchQuery}
-            placeholder="Event suchen: Titel, Ort, Kategorie, Veranstalter..."
+            placeholder="Event suchen: Titel, Ort, Kategorie, Veranstalter, Suchbegriff..."
           />
 
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -733,6 +948,7 @@ export default function AdminEventsPage() {
                   {paginatedEvents.map((event) => {
                     const hasImage = eventHasImage(event);
                     const isHighlighted = isHighlightedEvent(event);
+                    const eventLocationLine = getEventLocationLine(event);
 
                     return (
                       <tr
@@ -763,11 +979,11 @@ export default function AdminEventsPage() {
                           )}
                         </td>
 
-                        <td className="max-w-[16rem] px-4 py-4 text-slate-300">
-                          <p className="truncate">{event.city}</p>
+                        <td className="max-w-[20rem] px-4 py-4 text-slate-300">
+                          <p className="truncate">{event.city || "Ort offen"}</p>
 
                           <p className="mt-1 truncate text-xs text-slate-500">
-                            {event.locationName || "Keine Location"}
+                            {eventLocationLine}
                           </p>
                         </td>
 
@@ -869,10 +1085,14 @@ export default function AdminEventsPage() {
         isEditing={isEditing}
         isSubmitting={isSubmitting}
         isUploadingImage={isUploadingImage}
+        automaticSearchSuggestions={automaticSearchSuggestions}
+        selectedSearchTerms={selectedSearchTerms}
         deletingEventId={deletingEventId}
         onClose={closeDrawer}
         onSubmit={handleSubmit}
         onUpdateField={updateField}
+        onApplyAutomaticSearchSuggestions={applyAutomaticSearchSuggestions}
+        onAddSearchSuggestion={addSearchSuggestion}
         onUploadImage={uploadEventImage}
         onRemoveImage={removeEventImage}
         onEditEvent={openEditDrawer}
@@ -889,10 +1109,14 @@ function EventDrawer({
   isEditing,
   isSubmitting,
   isUploadingImage,
+  automaticSearchSuggestions,
+  selectedSearchTerms,
   deletingEventId,
   onClose,
   onSubmit,
   onUpdateField,
+  onApplyAutomaticSearchSuggestions,
+  onAddSearchSuggestion,
   onUploadImage,
   onRemoveImage,
   onEditEvent,
@@ -904,10 +1128,14 @@ function EventDrawer({
   isEditing: boolean;
   isSubmitting: boolean;
   isUploadingImage: boolean;
+  automaticSearchSuggestions: string[];
+  selectedSearchTerms: string[];
   deletingEventId: string | null;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onUpdateField: (field: keyof EventForm, value: string | boolean) => void;
+  onApplyAutomaticSearchSuggestions: () => void;
+  onAddSearchSuggestion: (term: string) => void;
   onUploadImage: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage: () => void;
   onEditEvent: (event: LocarioEvent) => void;
@@ -939,7 +1167,7 @@ function EventDrawer({
 
               <p className="mt-3 max-w-2xl text-slate-400">
                 {isFormMode
-                  ? "Erfasse oder bearbeite Eventdaten getrennt von der Tabelle."
+                  ? "Kategorie wählen, Vorschläge übernehmen und Suchbegriffe direkt bearbeiten."
                   : "Details, Sichtbarkeit, Paket, Links und Aktionen zu diesem Event."}
               </p>
             </div>
@@ -1031,9 +1259,7 @@ function EventDrawer({
                   onChange={(value) => onUpdateField("address", value)}
                   placeholder="Strasse, Hausnummer"
                 />
-              </div>
 
-              <div className="space-y-5">
                 <TextareaField
                   label="Beschreibung"
                   value={form.description}
@@ -1041,6 +1267,24 @@ function EventDrawer({
                   placeholder="Beschreibe das Event kurz und ansprechend."
                   rows={5}
                   required
+                />
+              </div>
+
+              <div className="space-y-5">
+                <InputField
+                  label="Sichtbare Zusatzlabels"
+                  value={form.tags}
+                  onChange={(value) => onUpdateField("tags", value)}
+                  placeholder="Zum Beispiel: gratis, kinderfreundlich, live musik..."
+                />
+
+                <SearchTermsEditor
+                  value={form.searchTerms}
+                  suggestions={automaticSearchSuggestions}
+                  selectedTerms={selectedSearchTerms}
+                  onChange={(value) => onUpdateField("searchTerms", value)}
+                  onApplyAll={onApplyAutomaticSearchSuggestions}
+                  onAddTerm={onAddSearchSuggestion}
                 />
 
                 <InputField
@@ -1149,6 +1393,11 @@ function EventDetailsDrawer({
 }) {
   const hasImage = eventHasImage(event);
   const isHighlighted = isHighlightedEvent(event);
+  const tags = uniqueTerms(getSafeStringArray(event.tags));
+  const searchTerms = uniqueTerms(getSafeStringArray(event.searchTerms));
+  const eventLocationLine = getEventLocationLine(event);
+  const websiteHref = getExternalHref(event.website);
+  const ticketHref = getExternalHref(event.ticketUrl);
 
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[20rem_1fr]">
@@ -1188,9 +1437,9 @@ function EventDetailsDrawer({
               Öffentlich öffnen
             </Link>
 
-            {event.website && (
+            {websiteHref && (
               <a
-                href={event.website}
+                href={websiteHref}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
@@ -1199,9 +1448,9 @@ function EventDetailsDrawer({
               </a>
             )}
 
-            {event.ticketUrl && (
+            {ticketHref && (
               <a
-                href={event.ticketUrl}
+                href={ticketHref}
                 target="_blank"
                 rel="noreferrer"
                 className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-center text-sm font-black text-cyan-100 transition hover:bg-cyan-300/10"
@@ -1253,12 +1502,13 @@ function EventDetailsDrawer({
         <div className="grid gap-4 md:grid-cols-2">
           <DetailBox title="Start" value={formatDateTime(event.startsAt)} />
           <DetailBox title="Ende" value={formatDateTime(event.endsAt)} />
-          <DetailBox title="Stadt" value={event.city} />
+          <DetailBox title="Stadt" value={event.city || "Nicht angegeben"} />
           <DetailBox
             title="Location"
             value={event.locationName || "Nicht angegeben"}
           />
           <DetailBox title="Adresse" value={event.address || "Nicht angegeben"} />
+          <DetailBox title="Ort komplett" value={eventLocationLine} />
           <DetailBox
             title="Paket"
             value={`${getEventPlanDescription(event.plan)} · ${getEventPlanPrice(
@@ -1273,6 +1523,20 @@ function EventDetailsDrawer({
             title="Status"
             value={event.isActive ? "Öffentlich sichtbar" : "Deaktiviert"}
           />
+          <DetailBox
+            title="Suchbegriffe"
+            value={
+              searchTerms.length > 0
+                ? searchTerms.slice(0, 30).join(", ")
+                : "Noch keine Suchbegriffe."
+            }
+          />
+          <DetailBox
+            title="Zusatzlabels"
+            value={
+              tags.length > 0 ? tags.join(", ") : "Keine Zusatzlabels."
+            }
+          />
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
@@ -1284,6 +1548,38 @@ function EventDetailsDrawer({
             {event.description}
           </p>
         </div>
+
+        {searchTerms.length > 0 && (
+          <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+            <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+              Suchlogik
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {searchTerms.slice(0, 80).map((term, termIndex) => (
+                <span
+                  key={`${normalizeKey(term)}-${termIndex}`}
+                  className="rounded-full border border-cyan-300/20 bg-slate-950/50 px-3 py-1 text-xs text-cyan-100"
+                >
+                  {term}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag, tagIndex) => (
+              <span
+                key={`${normalizeKey(tag)}-${tagIndex}`}
+                className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1338,6 +1634,101 @@ function DetailBox({ title, value }: { title: string; value: string }) {
       </p>
 
       <p className="mt-2 break-words text-sm text-slate-300">{value}</p>
+    </div>
+  );
+}
+
+function SearchTermsEditor({
+  value,
+  suggestions,
+  selectedTerms,
+  onChange,
+  onApplyAll,
+  onAddTerm,
+}: {
+  value: string;
+  suggestions: string[];
+  selectedTerms: string[];
+  onChange: (value: string) => void;
+  onApplyAll: () => void;
+  onAddTerm: (term: string) => void;
+}) {
+  const shownSuggestions = uniqueTerms(suggestions);
+  const selectedTermSet = new Set(selectedTerms.map(normalizeTerm));
+
+  return (
+    <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-4">
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+        <div>
+          <h3 className="text-lg font-black text-cyan-100">
+            Suchbegriffe
+          </h3>
+
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            Diese Begriffe steuern die Event-Suche. Du kannst sie bearbeiten,
+            ergänzen oder Vorschläge anklicken.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onApplyAll}
+          disabled={shownSuggestions.length === 0}
+          className="rounded-2xl border border-cyan-300/30 px-4 py-3 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Alle übernehmen
+        </button>
+      </div>
+
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="konzert, live musik, band, festival, openair..."
+        rows={7}
+        className="mt-4 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+      />
+
+      <p className="mt-2 text-xs text-slate-400">
+        Begriffe mit Komma trennen. Beispiel: live musik, kinderprogramm,
+        wochenende
+      </p>
+
+      {shownSuggestions.length === 0 && (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-sm text-slate-400">
+          Wähle zuerst eine Event-Kategorie aus.
+        </p>
+      )}
+
+      {shownSuggestions.length > 0 && (
+        <div className="mt-4">
+          <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
+            Vorschläge
+          </p>
+
+          <div className="mt-3 flex max-h-56 flex-wrap gap-2 overflow-y-auto pr-1">
+            {shownSuggestions.map((term, termIndex) => {
+              const isSelected = selectedTermSet.has(normalizeTerm(term));
+
+              return (
+                <button
+                  key={`${normalizeKey(term)}-${termIndex}`}
+                  type="button"
+                  onClick={() => onAddTerm(term)}
+                  disabled={isSelected}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed ${
+                    isSelected
+                      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+                      : "border-cyan-300/20 bg-slate-950/60 text-cyan-100 hover:bg-cyan-300/10"
+                  }`}
+                >
+                  {isSelected ? "✓ " : "+ "}
+                  {term}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1491,9 +1882,9 @@ function SelectField({
           {placeholder}
         </option>
 
-        {options.map((option) => (
+        {options.map((option, optionIndex) => (
           <option
-            key={option}
+            key={`${normalizeKey(option)}-${optionIndex}`}
             value={option}
             className="bg-slate-950 text-white"
           >
@@ -1629,9 +2020,9 @@ function CategoryFilterSelect({
           Alle Kategorien
         </option>
 
-        {eventCategories.map((category) => (
+        {eventCategories.map((category, categoryIndex) => (
           <option
-            key={category}
+            key={`${normalizeKey(category)}-${categoryIndex}`}
             value={category}
             className="bg-slate-950 text-white"
           >

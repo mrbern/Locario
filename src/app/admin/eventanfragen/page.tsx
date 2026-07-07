@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getEventPlanLabel, getEventPlanPrice } from "@/data/event-plans";
+import { getAutomaticEventSearchTerms } from "@/data/event-search-taxonomy";
 import type { EventInquiry } from "@/types/event-inquiry";
 import type { LocarioEvent } from "@/types/event";
 
@@ -113,6 +114,7 @@ function getInquirySearchText(inquiry: EventInquiry) {
       inquiry.phone,
       inquiry.website,
       inquiry.city,
+      inquiry.address,
       inquiry.desiredPlan,
       inquiry.category,
       inquiry.locationName,
@@ -441,6 +443,12 @@ export default function AdminEventInquiriesPage() {
       setErrorMessage("");
       setLatestPublishedEvent(null);
 
+      const tags = inquiry.tags ?? [];
+      const searchTerms = getAutomaticEventSearchTerms({
+        category: inquiry.category || "Sonstiges",
+        tags,
+      });
+
       const response = await fetch("/api/events", {
         method: "POST",
         headers: {
@@ -456,9 +464,12 @@ export default function AdminEventInquiriesPage() {
 
           city: inquiry.city,
           locationName: inquiry.locationName,
-          address: "",
+          address: inquiry.address || "",
 
           description: inquiry.description,
+
+          tags,
+          searchTerms,
 
           startsAt: inquiry.eventDate,
           endsAt: "",
@@ -676,7 +687,7 @@ export default function AdminEventInquiriesPage() {
             label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Event, Veranstalter, Ort, Kontakt..."
+            placeholder="Event, Veranstalter, Ort, Adresse, Kontakt..."
           />
 
           <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_1fr]">
@@ -788,8 +799,9 @@ export default function AdminEventInquiriesPage() {
                       </div>
 
                       <p className="mt-2 text-sm text-slate-300">
-                        {inquiry.city} · {inquiry.category} ·{" "}
-                        {formatDate(inquiry.eventDate)}
+                        {inquiry.city}
+                        {inquiry.address ? ` · ${inquiry.address}` : ""} ·{" "}
+                        {inquiry.category} · {formatDate(inquiry.eventDate)}
                       </p>
 
                       {!eventCanBeCreated && !isClosed && (
@@ -1127,8 +1139,8 @@ function EventInquiryDrawer({
                 </p>
 
                 <p className="mt-4 text-sm leading-6 text-slate-300">
-                  Nach dem Annehmen wird daraus ein Eventeintrag. Ab dann wird
-                  das Event nur noch unter /admin/events bearbeitet.
+                  Nach dem Annehmen wird daraus ein Eventeintrag. Adresse,
+                  Tags und Suchbegriffe werden direkt übernommen.
                 </p>
               </div>
             </div>
@@ -1144,6 +1156,10 @@ function EventInquiryDrawer({
                   value={inquiry.phone || "Nicht angegeben"}
                 />
                 <DetailBox title="Stadt" value={inquiry.city} />
+                <DetailBox
+                  title="Adresse"
+                  value={inquiry.address || "Nicht angegeben"}
+                />
                 <DetailBox
                   title="Location"
                   value={inquiry.locationName || "Nicht angegeben"}
@@ -1185,7 +1201,7 @@ function EventInquiryDrawer({
               {inquiry.tags.length > 0 && (
                 <section>
                   <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-                    Tags
+                    Tags / Suchbasis
                   </p>
 
                   <div className="mt-3 flex flex-wrap gap-2">

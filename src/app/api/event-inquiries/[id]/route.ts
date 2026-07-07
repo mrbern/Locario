@@ -38,6 +38,7 @@ function mapEventInquiry(inquiry: {
   phone: string | null;
   website: string | null;
   city: string;
+  address: string | null;
   desiredPlan: string;
   category: string;
   locationName: string | null;
@@ -59,6 +60,7 @@ function mapEventInquiry(inquiry: {
     phone: inquiry.phone ?? "",
     website: inquiry.website ?? "",
     city: inquiry.city,
+    address: inquiry.address ?? "",
 
     desiredPlan: inquiry.desiredPlan,
 

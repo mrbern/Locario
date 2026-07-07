@@ -2,791 +2,82 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { nearbyLocations } from "@/data/nearby-locations";
 import { companies as demoCompanies } from "@/data/companies";
-import { locationCoordinates } from "@/data/location-coordinates";
 import {
-  canCompanyUseAdvertising,
-  getCompanyPlanLabel,
-} from "@/data/plans";
+  getPlanBadgeClassName,
+  getSmartSearchMeta,
+  getUnifiedSearchResults,
+  smartSearchExamples,
+  type SearchType,
+  type SortMode,
+  type UnifiedSearchResult,
+  type UserLocation,
+} from "@/lib/smart-search";
 import type { Company } from "@/types/company";
+import type { LocarioEvent } from "@/types/event";
 
-type UserLocation = {
-  latitude: number;
-  longitude: number;
-};
-
-const stopWords = [
-  "ich",
-  "brauche",
-  "brauch",
-  "suche",
-  "such",
-  "will",
-  "möchte",
-  "moechte",
-  "benötige",
-  "benoetige",
-  "einen",
-  "eine",
-  "ein",
-  "den",
-  "die",
-  "das",
-  "der",
-  "dem",
-  "und",
-  "oder",
-  "mit",
-  "für",
-  "fuer",
-  "in",
-  "im",
-  "am",
-  "an",
-  "aus",
-  "von",
-  "nach",
-  "nähe",
-  "naehe",
-  "kaufen",
-  "kaufe",
-  "finden",
-];
-
-const businessSynonyms: Record<string, string[]> = {
-  werkstatt: [
-    "werkstatt",
-    "garage",
-    "autogarage",
-    "auto garage",
-    "autowerkstatt",
-    "autoservice",
-    "reparatur",
-    "fahrzeugservice",
-  ],
-  garage: [
-    "garage",
-    "autogarage",
-    "auto garage",
-    "werkstatt",
-    "autowerkstatt",
-    "autoservice",
-  ],
-  backerei: [
-    "backerei",
-    "baeckerei",
-    "bäckerei",
-    "konditorei",
-    "confiserie",
-    "cafe",
-    "brot",
-    "gipfeli",
-  ],
-  baeckerei: [
-    "backerei",
-    "baeckerei",
-    "bäckerei",
-    "konditorei",
-    "confiserie",
-    "cafe",
-    "brot",
-    "gipfeli",
-  ],
-};
-
-type CompanyMatchScore = {
-  businessScore: number;
-  locationScore: number;
-  totalScore: number;
-  businessWordCount: number;
-  matchedBusinessWordCount: number;
-};
-
-type QueryLocationFilter = {
-  hasLocationFilter: boolean;
-  targetLocation: string;
-  targetLocationWords: string[];
-  allowedLocations: Set<string>;
-};
-
-type SearchResult = {
-  company: Company;
-  locationRank: number;
-  distanceKm: number | null;
-};
-
-function normalizeText(value: string) {
+function normalizeKey(value: string) {
   return value
     .toLowerCase()
     .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ");
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-function getWords(value: string) {
-  return normalizeText(value)
+function formatDetectedText(value: string) {
+  const cleanValue = value.trim();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  return cleanValue
     .split(" ")
-    .map((word) => word.trim())
-    .filter(Boolean);
-}
-
-function getQueryWords(query: string) {
-  const words = getWords(query);
-  const meaningfulWords = words.filter((word) => !stopWords.includes(word));
-
-  return meaningfulWords.length > 0 ? meaningfulWords : words;
-}
-
-function getDisplayedSubCategories(company: Company) {
-  if (company.subCategories && company.subCategories.length > 0) {
-    return company.subCategories;
-  }
-
-  if (company.subCategory) {
-    return [company.subCategory];
-  }
-
-  if (company.category) {
-    return [company.category];
-  }
-
-  return [];
-}
-
-function getDisplayedMainCategory(company: Company) {
-  return company.mainCategory || "Allgemein";
-}
-
-function getPlanRank(company: Company) {
-  if (company.plan === "premium") {
-    return 4;
-  }
-
-  if (company.plan === "pro") {
-    return 3;
-  }
-
-  if (company.plan === "starter") {
-    return 2;
-  }
-
-  return 1;
-}
-
-function getPlanBadgeClassName(plan: string | undefined) {
-  if (plan === "premium") {
-    return "border-amber-300/30 bg-amber-300/10 text-amber-100";
-  }
-
-  if (plan === "pro") {
-    return "border-cyan-300/30 bg-cyan-300/10 text-cyan-100";
-  }
-
-  if (plan === "starter") {
-    return "border-blue-300/30 bg-blue-300/10 text-blue-100";
-  }
-
-  return "border-slate-300/20 bg-slate-300/10 text-slate-300";
-}
-
-function shouldShowPlanBadge(company: Company) {
-  return (
-    company.plan === "starter" ||
-    company.plan === "pro" ||
-    company.plan === "premium"
-  );
-}
-
-function shouldShowAdvertising(company: Company) {
-  return Boolean(company.ad) && canCompanyUseAdvertising(company.plan);
-}
-
-function companyHasImage(company: Company) {
-  return Boolean(company.imageUrl && company.imageUrl.trim());
-}
-
-function getCityWords(companyCity: string) {
-  return getWords(companyCity);
-}
-
-function isCompanyCityWord(word: string, companyCity: string) {
-  const normalizedWord = normalizeText(word);
-  const normalizedCity = normalizeText(companyCity);
-  const cityWords = getCityWords(companyCity);
-
-  if (!normalizedWord || !normalizedCity) {
-    return false;
-  }
-
-  return normalizedWord === normalizedCity || cityWords.includes(normalizedWord);
-}
-
-function isLocationOnlyTerm(term: string, companyCity: string) {
-  const normalizedTerm = normalizeText(term);
-  const normalizedCity = normalizeText(companyCity);
-  const cityWords = getCityWords(companyCity);
-
-  if (!normalizedTerm || !normalizedCity) {
-    return false;
-  }
-
-  return normalizedTerm === normalizedCity || cityWords.includes(normalizedTerm);
-}
-
-function getFilteredBusinessTerms(values: string[], companyCity: string) {
-  return values
-    .map(normalizeText)
-    .filter(Boolean)
-    .filter((value) => !isLocationOnlyTerm(value, companyCity));
-}
-
-function getNormalizedNearbyLocationMap() {
-  const normalizedMap = new Map<string, string[]>();
-
-  Object.entries(nearbyLocations).forEach(([location, locations]) => {
-    const normalizedLocation = normalizeText(location);
-
-    const normalizedLocations = [location, ...locations]
-      .map(normalizeText)
-      .filter(Boolean);
-
-    normalizedMap.set(
-      normalizedLocation,
-      Array.from(new Set(normalizedLocations))
-    );
-  });
-
-  return normalizedMap;
-}
-
-function queryContainsLocation(query: string, location: string) {
-  const normalizedQuery = ` ${normalizeText(query)} `;
-  const normalizedLocation = normalizeText(location);
-
-  if (!normalizedLocation) {
-    return false;
-  }
-
-  return normalizedQuery.includes(` ${normalizedLocation} `);
-}
-
-function getQueryLocationFilter(
-  query: string,
-  companies: Company[]
-): QueryLocationFilter {
-  const normalizedNearbyMap = getNormalizedNearbyLocationMap();
-
-  const knownLocations = new Set<string>();
-
-  normalizedNearbyMap.forEach((locations, location) => {
-    knownLocations.add(location);
-
-    locations.forEach((nearbyLocation) => {
-      knownLocations.add(nearbyLocation);
-    });
-  });
-
-  companies.forEach((company) => {
-    const normalizedCity = normalizeText(company.city);
-
-    if (normalizedCity) {
-      knownLocations.add(normalizedCity);
-    }
-  });
-
-  Object.keys(locationCoordinates).forEach((location) => {
-    knownLocations.add(normalizeText(location));
-  });
-
-  const matchingLocation = Array.from(knownLocations)
-    .sort((a, b) => b.length - a.length)
-    .find((location) => queryContainsLocation(query, location));
-
-  if (!matchingLocation) {
-    return {
-      hasLocationFilter: false,
-      targetLocation: "",
-      targetLocationWords: [],
-      allowedLocations: new Set(),
-    };
-  }
-
-  const allowedLocations =
-    normalizedNearbyMap.get(matchingLocation) ?? [matchingLocation];
-
-  return {
-    hasLocationFilter: true,
-    targetLocation: matchingLocation,
-    targetLocationWords: getWords(matchingLocation),
-    allowedLocations: new Set(allowedLocations),
-  };
-}
-
-function getCompanyLocationRank(
-  company: Company,
-  locationFilter: QueryLocationFilter
-) {
-  if (!locationFilter.hasLocationFilter) {
-    return 0;
-  }
-
-  const normalizedCity = normalizeText(company.city);
-
-  if (normalizedCity === locationFilter.targetLocation) {
-    return 0;
-  }
-
-  if (locationFilter.allowedLocations.has(normalizedCity)) {
-    return 1;
-  }
-
-  return 999;
-}
-
-function isQueryLocationWord(word: string, locationFilter: QueryLocationFilter) {
-  if (!locationFilter.hasLocationFilter) {
-    return false;
-  }
-
-  return locationFilter.targetLocationWords.includes(normalizeText(word));
-}
-
-function getExpandedBusinessWords(word: string) {
-  const normalizedWord = normalizeText(word);
-  const synonyms = businessSynonyms[normalizedWord] ?? [];
-
-  return Array.from(
-    new Set([normalizedWord, ...synonyms.map(normalizeText)].filter(Boolean))
-  );
-}
-
-function wordMatchesText(word: string, text: string) {
-  const normalizedWord = normalizeText(word);
-  const normalizedText = normalizeText(text);
-
-  if (!normalizedWord || !normalizedText) {
-    return false;
-  }
-
-  const textWords = normalizedText.split(" ").filter(Boolean);
-
-  return textWords.some((textWord) => {
-    if (textWord === normalizedWord) {
-      return true;
-    }
-
-    if (normalizedWord.length >= 4 && textWord.includes(normalizedWord)) {
-      return true;
-    }
-
-    if (textWord.length >= 4 && normalizedWord.includes(textWord)) {
-      return true;
-    }
-
-    return false;
-  });
-}
-
-function hasBusinessWordMatch(word: string, businessTexts: string[]) {
-  const expandedWords = getExpandedBusinessWords(word);
-
-  return expandedWords.some((expandedWord) =>
-    businessTexts.some((text) => wordMatchesText(expandedWord, text))
-  );
-}
-
-function hasBusinessPhraseMatch(query: string, businessTexts: string[]) {
-  const normalizedQuery = normalizeText(query);
-
-  return businessTexts.some((text) => {
-    const normalizedText = normalizeText(text);
-
-    if (!normalizedText) {
-      return false;
-    }
-
-    return normalizedQuery.includes(normalizedText);
-  });
-}
-
-function getBusinessTexts(company: Company) {
-  const advertisingAllowed = shouldShowAdvertising(company);
-
-  const filteredTags = getFilteredBusinessTerms(company.tags, company.city);
-  const filteredSearchTerms = getFilteredBusinessTerms(
-    company.searchTerms,
-    company.city
-  );
-
-  return [
-    company.name,
-    getDisplayedMainCategory(company),
-    ...getDisplayedSubCategories(company),
-    company.category,
-    company.description,
-    ...filteredTags,
-    ...filteredSearchTerms,
-    advertisingAllowed ? company.ad?.title ?? "" : "",
-    advertisingAllowed ? company.ad?.description ?? "" : "",
-    advertisingAllowed ? company.ad?.cta ?? "" : "",
-  ]
-    .map(normalizeText)
-    .filter(Boolean);
-}
-
-function calculateCompanyMatchScore(
-  query: string,
-  company: Company,
-  locationFilter: QueryLocationFilter
-): CompanyMatchScore {
-  const normalizedQuery = normalizeText(query);
-  const queryWords = getQueryWords(query);
-
-  if (!normalizedQuery) {
-    return {
-      businessScore: 1,
-      locationScore: 0,
-      totalScore: 1,
-      businessWordCount: 0,
-      matchedBusinessWordCount: 0,
-    };
-  }
-
-  const companyCity = normalizeText(company.city);
-  const businessTexts = getBusinessTexts(company);
-
-  const businessWords = queryWords.filter((word) => {
-    return (
-      !isCompanyCityWord(word, company.city) &&
-      !isQueryLocationWord(word, locationFilter)
-    );
-  });
-
-  let businessScore = 0;
-  let locationScore = 0;
-  let matchedBusinessWordCount = 0;
-
-  if (companyCity && normalizedQuery.includes(companyCity)) {
-    locationScore += 45;
-  }
-
-  if (
-    locationFilter.hasLocationFilter &&
-    locationFilter.allowedLocations.has(companyCity)
-  ) {
-    locationScore += companyCity === locationFilter.targetLocation ? 45 : 25;
-  }
-
-  for (const word of queryWords) {
-    if (isCompanyCityWord(word, company.city)) {
-      locationScore += 26;
-    }
-  }
-
-  if (businessWords.length > 0) {
-    for (const word of businessWords) {
-      if (hasBusinessWordMatch(word, businessTexts)) {
-        matchedBusinessWordCount += 1;
-        businessScore += 30;
+    .map((word) => {
+      if (word.length <= 2) {
+        return word.toUpperCase();
       }
-    }
-  }
 
-  if (hasBusinessPhraseMatch(query, businessTexts)) {
-    businessScore += 20;
-  }
-
-  const displayedMainCategory = normalizeText(getDisplayedMainCategory(company));
-  const displayedSubCategories =
-    getDisplayedSubCategories(company).map(normalizeText);
-  const companyCategory = normalizeText(company.category);
-  const companyName = normalizeText(company.name);
-  const companyDescription = normalizeText(company.description);
-  const companyTags = getFilteredBusinessTerms(company.tags, company.city);
-  const companySearchTerms = getFilteredBusinessTerms(
-    company.searchTerms,
-    company.city
-  );
-
-  for (const word of businessWords) {
-    const expandedWords = getExpandedBusinessWords(word);
-
-    if (
-      expandedWords.some((expandedWord) =>
-        displayedSubCategories.some((subCategory) =>
-          wordMatchesText(expandedWord, subCategory)
-        )
-      )
-    ) {
-      businessScore += 18;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        wordMatchesText(expandedWord, displayedMainCategory)
-      )
-    ) {
-      businessScore += 16;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        wordMatchesText(expandedWord, companyCategory)
-      )
-    ) {
-      businessScore += 14;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        wordMatchesText(expandedWord, companyName)
-      )
-    ) {
-      businessScore += 12;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        companyTags.some((tag) => wordMatchesText(expandedWord, tag))
-      )
-    ) {
-      businessScore += 12;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        companySearchTerms.some((term) => wordMatchesText(expandedWord, term))
-      )
-    ) {
-      businessScore += 12;
-    }
-
-    if (
-      expandedWords.some((expandedWord) =>
-        wordMatchesText(expandedWord, companyDescription)
-      )
-    ) {
-      businessScore += 4;
-    }
-  }
-
-  if (shouldShowAdvertising(company) && businessScore > 0) {
-    businessScore += 3;
-  }
-
-  return {
-    businessScore,
-    locationScore,
-    totalScore: businessScore + locationScore,
-    businessWordCount: businessWords.length,
-    matchedBusinessWordCount,
-  };
-}
-
-function shouldIncludeCompany(matchScore: CompanyMatchScore) {
-  if (matchScore.businessWordCount > 0) {
-    return matchScore.matchedBusinessWordCount > 0;
-  }
-
-  return matchScore.locationScore > 0 || matchScore.businessScore > 0;
-}
-
-function getCoordinateForCity(city: string) {
-  const normalizedCity = normalizeText(city);
-
-  return locationCoordinates[normalizedCity] ?? null;
-}
-
-function calculateDistanceKm(
-  firstLocation: UserLocation,
-  secondLocation: UserLocation
-) {
-  const earthRadiusKm = 6371;
-
-  const latitudeDifference =
-    ((secondLocation.latitude - firstLocation.latitude) * Math.PI) / 180;
-  const longitudeDifference =
-    ((secondLocation.longitude - firstLocation.longitude) * Math.PI) / 180;
-
-  const firstLatitudeRadians = (firstLocation.latitude * Math.PI) / 180;
-  const secondLatitudeRadians = (secondLocation.latitude * Math.PI) / 180;
-
-  const a =
-    Math.sin(latitudeDifference / 2) * Math.sin(latitudeDifference / 2) +
-    Math.cos(firstLatitudeRadians) *
-      Math.cos(secondLatitudeRadians) *
-      Math.sin(longitudeDifference / 2) *
-      Math.sin(longitudeDifference / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return Math.round(earthRadiusKm * c * 10) / 10;
-}
-
-function getCompanyDistanceKm(company: Company, userLocation: UserLocation | null) {
-  if (!userLocation) {
-    return null;
-  }
-
-  const companyCoordinate = getCoordinateForCity(company.city);
-
-  if (!companyCoordinate) {
-    return null;
-  }
-
-  return calculateDistanceKm(userLocation, companyCoordinate);
-}
-
-function compareDistances(aDistance: number | null, bDistance: number | null) {
-  if (aDistance === null && bDistance === null) {
-    return 0;
-  }
-
-  if (aDistance === null) {
-    return 1;
-  }
-
-  if (bDistance === null) {
-    return -1;
-  }
-
-  return aDistance - bDistance;
-}
-
-function getSearchResultsForQuery(
-  query: string,
-  companies: Company[],
-  userLocation: UserLocation | null
-): SearchResult[] {
-  const normalizedQuery = normalizeText(query);
-  const locationFilter = getQueryLocationFilter(query, companies);
-
-  if (!normalizedQuery) {
-    return [...companies]
-      .map((company) => ({
-        company,
-        distanceKm: getCompanyDistanceKm(company, userLocation),
-      }))
-      .sort((a, b) => {
-        if (userLocation) {
-          const distanceDifference = compareDistances(
-            a.distanceKm,
-            b.distanceKm
-          );
-
-          if (distanceDifference !== 0) {
-            return distanceDifference;
-          }
-        }
-
-        const planDifference = getPlanRank(b.company) - getPlanRank(a.company);
-
-        if (planDifference !== 0) {
-          return planDifference;
-        }
-
-        return a.company.name.localeCompare(b.company.name);
-      })
-      .map((item) => ({
-        company: item.company,
-        locationRank: 0,
-        distanceKm: item.distanceKm,
-      }));
-  }
-
-  return companies
-    .map((company) => {
-      const matchScore = calculateCompanyMatchScore(
-        query,
-        company,
-        locationFilter
-      );
-      const locationRank = getCompanyLocationRank(company, locationFilter);
-      const distanceKm = getCompanyDistanceKm(company, userLocation);
-
-      return {
-        company,
-        matchScore,
-        planRank: getPlanRank(company),
-        locationRank,
-        distanceKm,
-      };
+      return word.charAt(0).toUpperCase() + word.slice(1);
     })
-    .filter((item) => {
-      if (locationFilter.hasLocationFilter && item.locationRank === 999) {
-        return false;
-      }
-
-      return shouldIncludeCompany(item.matchScore);
-    })
-    .sort((a, b) => {
-      if (
-        locationFilter.hasLocationFilter &&
-        a.locationRank !== b.locationRank
-      ) {
-        return a.locationRank - b.locationRank;
-      }
-
-      if (userLocation) {
-        const distanceDifference = compareDistances(
-          a.distanceKm,
-          b.distanceKm
-        );
-
-        if (distanceDifference !== 0) {
-          return distanceDifference;
-        }
-      }
-
-      if (b.matchScore.businessScore !== a.matchScore.businessScore) {
-        return b.matchScore.businessScore - a.matchScore.businessScore;
-      }
-
-      if (b.planRank !== a.planRank) {
-        return b.planRank - a.planRank;
-      }
-
-      if (b.matchScore.totalScore !== a.matchScore.totalScore) {
-        return b.matchScore.totalScore - a.matchScore.totalScore;
-      }
-
-      return a.company.name.localeCompare(b.company.name);
-    })
-    .map((item) => ({
-      company: item.company,
-      locationRank: item.locationRank,
-      distanceKm: item.distanceKm,
-    }));
+    .join(" ");
 }
 
-function getResultsForQuery(
-  query: string,
-  companies: Company[],
-  userLocation: UserLocation | null
-) {
-  return getSearchResultsForQuery(query, companies, userLocation).map(
-    (item) => item.company
-  );
-}
+function uniqueDisplayValues(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueValues: string[] = [];
 
-function getCompanyHref(company: Company, query: string) {
-  const cleanedQuery = query.trim();
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+    const normalizedValue = normalizeKey(cleanValue);
 
-  if (!cleanedQuery) {
-    return `/firmen/${company.id}`;
-  }
+    if (!cleanValue || !normalizedValue || seenValues.has(normalizedValue)) {
+      return;
+    }
 
-  return `/firmen/${company.id}?q=${encodeURIComponent(cleanedQuery)}`;
+    seenValues.add(normalizedValue);
+    uniqueValues.push(cleanValue);
+  });
+
+  return uniqueValues;
 }
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [initialUrlQuery, setInitialUrlQuery] = useState("");
   const [databaseCompanies, setDatabaseCompanies] = useState<Company[]>([]);
+  const [events, setEvents] = useState<LocarioEvent[]>([]);
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+
+  const [selectedType, setSelectedType] = useState<SearchType>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("relevance");
+
   const [locationMessage, setLocationMessage] = useState("");
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -795,22 +86,6 @@ export default function SearchPage() {
   const [searchLogMessage, setSearchLogMessage] = useState("");
 
   const hasSavedInitialUrlQuery = useRef(false);
-
-  const examples = [
-    "Werkstatt Wattenwil",
-    "Bäckerei Wattenwil",
-    "Garage Wattenwil",
-    "Wattenwil",
-    "Ich brauche Kies",
-    "Kies Bern",
-    "Coiffeur Zürich",
-    "Nissan kaufen",
-    "Garage Aarau",
-    "Occasionen Aarau",
-    "Autolackiererei",
-    "Reifenservice",
-    "Elektriker Luzern",
-  ];
 
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -841,28 +116,58 @@ export default function SearchPage() {
       }
     }
 
-    loadCompanies();
+    loadSearchData();
   }, []);
 
   const allCompanies = useMemo(() => {
     return [...demoCompanies, ...databaseCompanies];
   }, [databaseCompanies]);
 
+  const searchMeta = useMemo(() => {
+    return getSmartSearchMeta({
+      query,
+      companies: allCompanies,
+      events,
+    });
+  }, [query, allCompanies, events]);
+
+  const allTypeResults = useMemo(() => {
+    return getUnifiedSearchResults({
+      query,
+      companies: allCompanies,
+      events,
+      userLocation,
+      selectedType: "all",
+      sortMode,
+    });
+  }, [query, allCompanies, events, userLocation, sortMode]);
+
   const searchResults = useMemo(() => {
-    return getSearchResultsForQuery(query, allCompanies, userLocation);
-  }, [query, allCompanies, userLocation]);
+    return getUnifiedSearchResults({
+      query,
+      companies: allCompanies,
+      events,
+      userLocation,
+      selectedType,
+      sortMode,
+    });
+  }, [query, allCompanies, events, userLocation, selectedType, sortMode]);
 
-  const results = useMemo(() => {
-    return searchResults.map((item) => item.company);
-  }, [searchResults]);
+  const companyResultCount = allTypeResults.filter(
+    (result) => result.type === "company"
+  ).length;
 
-  const directResults = useMemo(() => {
-    return searchResults.filter((item) => item.locationRank === 0);
-  }, [searchResults]);
+  const eventResultCount = allTypeResults.filter(
+    (result) => result.type === "event"
+  ).length;
 
-  const nearbyResults = useMemo(() => {
-    return searchResults.filter((item) => item.locationRank === 1);
-  }, [searchResults]);
+  const directResults = searchResults.filter(
+    (result) => result.locationRank === 0
+  );
+
+  const nearbyResults = searchResults.filter(
+    (result) => result.locationRank === 1
+  );
 
   useEffect(() => {
     if (isLoading) {
@@ -879,33 +184,62 @@ export default function SearchPage() {
 
     hasSavedInitialUrlQuery.current = true;
 
-    const matchingResults = getResultsForQuery(
-      initialUrlQuery,
-      allCompanies,
-      userLocation
-    );
-    saveSearchLog(initialUrlQuery, matchingResults.length);
-  }, [isLoading, initialUrlQuery, allCompanies, userLocation]);
+    const matchingResults = getUnifiedSearchResults({
+      query: initialUrlQuery,
+      companies: allCompanies,
+      events,
+      userLocation,
+      selectedType: "all",
+      sortMode: "relevance",
+    });
 
-  async function loadCompanies() {
+    saveSearchLog(initialUrlQuery, matchingResults.length);
+  }, [isLoading, initialUrlQuery, allCompanies, events, userLocation]);
+
+  async function loadSearchData() {
     try {
       setIsLoading(true);
       setErrorMessage("");
 
-      const response = await fetch("/api/companies", {
-        method: "GET",
-      });
+      const [companiesResult, eventsResult] = await Promise.allSettled([
+        fetch("/api/companies", {
+          method: "GET",
+        }).then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Firmen konnten nicht geladen werden.");
+          }
 
-      if (!response.ok) {
-        throw new Error("Firmen konnten nicht geladen werden.");
+          return (await response.json()) as Company[];
+        }),
+        fetch("/api/events", {
+          method: "GET",
+        }).then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Events konnten nicht geladen werden.");
+          }
+
+          return (await response.json()) as LocarioEvent[];
+        }),
+      ]);
+
+      if (companiesResult.status === "fulfilled") {
+        setDatabaseCompanies(companiesResult.value);
       }
 
-      const data = (await response.json()) as Company[];
-      setDatabaseCompanies(data);
+      if (eventsResult.status === "fulfilled") {
+        setEvents(eventsResult.value);
+      }
+
+      if (
+        companiesResult.status === "rejected" ||
+        eventsResult.status === "rejected"
+      ) {
+        setErrorMessage(
+          "Ein Teil der Suchdaten konnte nicht geladen werden. Die Suche funktioniert eingeschränkt weiter."
+        );
+      }
     } catch {
-      setErrorMessage(
-        "Die Firmen aus der Datenbank konnten nicht geladen werden."
-      );
+      setErrorMessage("Die Suchdaten konnten nicht vollständig geladen werden.");
     } finally {
       setIsLoading(false);
     }
@@ -937,7 +271,7 @@ export default function SearchPage() {
         throw new Error("Suchanfrage konnte nicht gespeichert werden.");
       }
 
-      setSearchLogMessage("Suchanfrage wurde gespeichert.");
+      setSearchLogMessage("Suchanfrage wurde für die Analyse gespeichert.");
 
       setTimeout(() => {
         setSearchLogMessage("");
@@ -959,6 +293,7 @@ export default function SearchPage() {
     const cleanedQuery = searchQuery.trim();
 
     setQuery(searchQuery);
+    setSelectedType("all");
 
     if (!cleanedQuery) {
       window.history.replaceState(null, "", "/suche");
@@ -971,11 +306,14 @@ export default function SearchPage() {
       `/suche?q=${encodeURIComponent(cleanedQuery)}`
     );
 
-    const matchingResults = getResultsForQuery(
-      cleanedQuery,
-      allCompanies,
-      userLocation
-    );
+    const matchingResults = getUnifiedSearchResults({
+      query: cleanedQuery,
+      companies: allCompanies,
+      events,
+      userLocation,
+      selectedType: "all",
+      sortMode: "relevance",
+    });
 
     await saveSearchLog(cleanedQuery, matchingResults.length);
   }
@@ -1008,8 +346,9 @@ export default function SearchPage() {
           "Locario-user-location",
           JSON.stringify(detectedLocation)
         );
+        setSortMode("distance");
         setLocationMessage(
-          "Standort wurde erkannt. Ergebnisse werden nach Nähe sortiert."
+          "Standort wurde erkannt. Ergebnisse können nach Nähe sortiert werden."
         );
         setIsDetectingLocation(false);
       },
@@ -1029,12 +368,17 @@ export default function SearchPage() {
 
   function clearCurrentLocation() {
     setUserLocation(null);
+    setSortMode("relevance");
     window.localStorage.removeItem("Locario-user-location");
     setLocationMessage("Standortsortierung wurde deaktiviert.");
   }
 
+  const detectedLocation = searchMeta.locationFilter.hasLocationFilter
+    ? formatDetectedText(searchMeta.locationFilter.targetLocation)
+    : "kein Ort erkannt";
+
   return (
-    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-6 py-16 text-white">
+    <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-12rem] top-[-10rem] h-[32rem] w-[32rem] rounded-full bg-cyan-400/20 blur-3xl" />
         <div className="absolute right-[-14rem] top-[10rem] h-[36rem] w-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
@@ -1046,45 +390,72 @@ export default function SearchPage() {
           <div>
             <div className="inline-flex items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
-              Locario Suche
+              Locario Smart Search
             </div>
 
             <h1 className="mt-6 max-w-4xl text-5xl font-black tracking-tight md:text-7xl">
-              Was suchst du{" "}
+              Finde, was du{" "}
               <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-                in deiner Nähe?
+                wirklich meinst.
               </span>
             </h1>
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
-              Suche nach Produkten, Dienstleistungen oder Firmen. Locario zeigt
-              fachlich passende Treffer im gesuchten Ort, in Nachbardörfern und
-              optional nach deiner Nähe sortiert an.
+              Suche frei nach Produkten, Dienstleistungen, Firmen oder Events.
+              Locario erkennt Begriffe, Orte, Synonyme, Zeiträume und passende
+              regionale Treffer.
             </p>
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/30 backdrop-blur-xl">
             <div className="grid gap-4 sm:grid-cols-3">
-              <SearchStat value={results.length.toString()} label="Treffer" />
               <SearchStat
-                value={directResults.length.toString()}
-                label="direkt"
+                value={searchResults.length.toString()}
+                label="Treffer"
               />
               <SearchStat
-                value={nearbyResults.length.toString()}
-                label="Umgebung"
+                value={companyResultCount.toString()}
+                label="Firmen"
               />
+              <SearchStat value={eventResultCount.toString()} label="Events" />
             </div>
 
             <div className="mt-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
               <p className="text-sm font-bold text-cyan-100">
-                Standortsortierung
+                Smart-Erkennung
               </p>
 
-              <p className="mt-1 text-sm text-slate-300">
-                Nutze deinen Standort, damit passende Firmen zusätzlich nach
-                Distanz sortiert und mit Kilometerangabe angezeigt werden.
-              </p>
+              <div className="mt-3 grid gap-2 text-sm text-slate-300">
+                <p>
+                  Absicht:{" "}
+                  <span className="font-black text-white">
+                    {searchMeta.intent.label}
+                  </span>
+                </p>
+
+                <p>
+                  Ort:{" "}
+                  <span className="font-black text-white">
+                    {detectedLocation}
+                  </span>
+                </p>
+
+                <p>
+                  Zeitraum:{" "}
+                  <span className="font-black text-white">
+                    {searchMeta.intent.timeLabel}
+                  </span>
+                </p>
+
+                <p>
+                  Begriffe:{" "}
+                  <span className="font-black text-white">
+                    {searchMeta.queryWords.length > 0
+                      ? searchMeta.queryWords.slice(0, 6).join(", ")
+                      : "noch keine"}
+                  </span>
+                </p>
+              </div>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                 <button
@@ -1128,7 +499,7 @@ export default function SearchPage() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             className="w-full rounded-[1.5rem] bg-white px-5 py-5 text-lg font-semibold text-slate-950 outline-none placeholder:text-slate-500"
-            placeholder="Zum Beispiel: Werkstatt Wattenwil"
+            placeholder="Zum Beispiel: Ich brauche Kies in Wattenwil"
           />
 
           <button
@@ -1141,9 +512,9 @@ export default function SearchPage() {
         </form>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          {examples.map((example) => (
+          {smartSearchExamples.map((example, exampleIndex) => (
             <button
-              key={example}
+              key={`${normalizeKey(example)}-${exampleIndex}`}
               type="button"
               onClick={() => runSearch(example)}
               className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-medium text-slate-300 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100"
@@ -1153,6 +524,58 @@ export default function SearchPage() {
           ))}
         </div>
 
+        <div className="mt-8 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <FilterButton
+              active={selectedType === "all"}
+              label="Alles"
+              value={allTypeResults.length}
+              onClick={() => setSelectedType("all")}
+            />
+
+            <FilterButton
+              active={selectedType === "companies"}
+              label="Firmen"
+              value={companyResultCount}
+              onClick={() => setSelectedType("companies")}
+            />
+
+            <FilterButton
+              active={selectedType === "events"}
+              label="Events"
+              value={eventResultCount}
+              onClick={() => setSelectedType("events")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setSortMode("relevance")}
+              className={`rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                sortMode === "relevance"
+                  ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100"
+                  : "border-white/10 bg-white/[0.06] text-slate-300 hover:border-cyan-300/30 hover:bg-white/[0.08]"
+              }`}
+            >
+              Beste Treffer
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSortMode("distance")}
+              disabled={!userLocation}
+              className={`rounded-2xl border px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                sortMode === "distance"
+                  ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-100"
+                  : "border-white/10 bg-white/[0.06] text-slate-300 hover:border-emerald-300/30 hover:bg-white/[0.08]"
+              }`}
+            >
+              Nach Nähe
+            </button>
+          </div>
+        </div>
+
         {searchLogMessage && (
           <div className="mt-8 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5 text-sm font-semibold text-cyan-100 shadow-xl shadow-cyan-950/20">
             {searchLogMessage}
@@ -1160,7 +583,7 @@ export default function SearchPage() {
         )}
 
         {errorMessage && (
-          <div className="mt-8 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 font-semibold text-red-200">
+          <div className="mt-8 rounded-3xl border border-amber-400/30 bg-amber-400/10 p-5 font-semibold text-amber-100">
             {errorMessage}
           </div>
         )}
@@ -1169,7 +592,7 @@ export default function SearchPage() {
           <div className="mt-12 rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-slate-300 shadow-2xl shadow-slate-950/20">
             <div className="flex items-center gap-4">
               <div className="h-4 w-4 animate-pulse rounded-full bg-cyan-300" />
-              Firmen werden geladen...
+              Suchdaten werden geladen...
             </div>
           </div>
         )}
@@ -1183,13 +606,13 @@ export default function SearchPage() {
                 </p>
 
                 <h2 className="mt-2 text-3xl font-black">
-                  {results.length} Ergebnis
-                  {results.length === 1 ? "" : "se"} gefunden
+                  {searchResults.length} Ergebnis
+                  {searchResults.length === 1 ? "" : "se"} gefunden
                 </h2>
 
                 <p className="mt-2 text-slate-400">
-                  Passend nach Leistung, Ort, Nachbardörfern
-                  {userLocation ? " und Distanz." : "."}
+                  Sortiert nach Bedeutung, Ort, Kategorie, Zeitraum, Paketlogik
+                  und optional Distanz.
                 </p>
               </div>
 
@@ -1199,7 +622,7 @@ export default function SearchPage() {
               </div>
             </div>
 
-            <CompanyResultGrid results={directResults} query={query} />
+            <UnifiedResultGrid results={directResults} />
 
             {nearbyResults.length > 0 && (
               <section className="mt-14">
@@ -1211,47 +634,18 @@ export default function SearchPage() {
                       In der Umgebung
                     </p>
                     <p className="text-xs text-slate-400">
-                      Passende Firmen aus Nachbardörfern
+                      Passende Treffer aus Nachbarorten
                     </p>
                   </div>
 
                   <div className="h-px flex-1 bg-gradient-to-l from-transparent via-white/15 to-white/10" />
                 </div>
 
-                <CompanyResultGrid results={nearbyResults} query={query} />
+                <UnifiedResultGrid results={nearbyResults} />
               </section>
             )}
 
-            {results.length === 0 && (
-              <div className="mt-12 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20">
-                <div className="max-w-2xl">
-                  <p className="text-sm font-bold uppercase tracking-wide text-cyan-300">
-                    Keine Treffer
-                  </p>
-
-                  <h2 className="mt-3 text-3xl font-black">
-                    Keine passende Firma gefunden
-                  </h2>
-
-                  <p className="mt-4 text-slate-300">
-                    Locario speichert solche Suchanfragen. So erkennst du später,
-                    welche Firmen oder Branchen in deiner Region gefragt sind.
-                  </p>
-
-                  <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-5">
-                    <p className="font-bold text-cyan-100">
-                      Chance für Locario
-                    </p>
-
-                    <p className="mt-2 text-sm text-slate-300">
-                      Wenn viele Nutzer nach einem Angebot suchen, aber keine
-                      Treffer finden, ist das ein starkes Signal für neue
-                      Akquise.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {searchResults.length === 0 && <NoResultsBox query={query} />}
           </>
         )}
       </section>
@@ -1263,6 +657,7 @@ function SearchStat({ value, label }: { value: string; label: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
       <p className="text-3xl font-black text-cyan-200">{value}</p>
+
       <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
         {label}
       </p>
@@ -1276,60 +671,93 @@ function ResultBadge({ label, value }: { label: string; value: number }) {
       <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
         {label}
       </p>
+
       <p className="text-xl font-black text-white">{value}</p>
     </div>
   );
 }
 
-function CompanyResultGrid({
-  results,
-  query,
+function FilterButton({
+  active,
+  label,
+  value,
+  onClick,
 }: {
-  results: SearchResult[];
-  query: string;
+  active: boolean;
+  label: string;
+  value: number;
+  onClick: () => void;
 }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-2xl border px-4 py-3 text-left transition ${
+        active
+          ? "border-cyan-300/40 bg-cyan-300/10 text-cyan-100"
+          : "border-white/10 bg-white/[0.06] text-slate-300 hover:border-cyan-300/30 hover:bg-white/[0.08]"
+      }`}
+    >
+      <span className="block text-sm font-black">{label}</span>
+      <span className="mt-1 block text-2xl font-black">{value}</span>
+    </button>
+  );
+}
+
+function UnifiedResultGrid({ results }: { results: UnifiedSearchResult[] }) {
   if (results.length === 0) {
     return null;
   }
 
   return (
     <div className="mt-7 grid gap-6 md:grid-cols-2">
-      {results.map((result) => {
-        const company = result.company;
-        const displayedMainCategory = getDisplayedMainCategory(company);
-        const displayedSubCategories = getDisplayedSubCategories(company);
-        const advertisingVisible = shouldShowAdvertising(company);
-        const hasImage = companyHasImage(company);
+      {results.map((result, resultIndex) => {
+        const hasImage = Boolean(result.imageUrl && result.imageUrl.trim());
+        const secondaryBadges = uniqueDisplayValues(result.secondaryBadges);
+        const resultTags = uniqueDisplayValues(result.tags);
+        const reasons = uniqueDisplayValues(result.score.reasons);
 
         return (
           <Link
-            key={company.id}
-            href={getCompanyHref(company, query)}
-            className="group overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.09]"
+            key={`${result.id}-${resultIndex}`}
+            href={result.href}
+            className="group flex min-w-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] shadow-2xl shadow-slate-950/20 transition hover:-translate-y-1 hover:border-cyan-300/30 hover:bg-white/[0.09]"
           >
-            <div className="relative h-40 overflow-hidden">
+            <div className="relative h-44 overflow-hidden">
               {hasImage ? (
                 <img
-                  src={company.imageUrl}
-                  alt={company.name}
+                  src={result.imageUrl}
+                  alt={result.title}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                 />
               ) : (
                 <>
-                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/25 via-blue-500/20 to-slate-950" />
+                  <div
+                    className={`absolute inset-0 ${
+                      result.type === "event"
+                        ? "bg-gradient-to-br from-amber-400/25 via-cyan-500/15 to-slate-950"
+                        : "bg-gradient-to-br from-cyan-400/25 via-blue-500/20 to-slate-950"
+                    }`}
+                  />
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.22),transparent_16rem)]" />
                 </>
               )}
 
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-transparent" />
 
-              <div className="absolute bottom-5 left-5 flex flex-wrap gap-2">
-                <span className="rounded-full border border-cyan-300/20 bg-slate-950/60 px-3 py-1 text-sm font-bold text-cyan-100 backdrop-blur">
-                  {displayedMainCategory}
+              <div className="absolute bottom-5 left-5 right-5 flex flex-wrap gap-2">
+                <span
+                  className={`rounded-full border px-3 py-1 text-sm font-bold backdrop-blur ${
+                    result.type === "event"
+                      ? "border-amber-300/20 bg-amber-300/10 text-amber-100"
+                      : "border-cyan-300/20 bg-slate-950/60 text-cyan-100"
+                  }`}
+                >
+                  {result.meta}
                 </span>
 
-                <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-200 backdrop-blur">
-                  {company.city}
+                <span className="max-w-full rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-200 backdrop-blur">
+                  <span className="line-clamp-1">{result.city || "Region"}</span>
                 </span>
 
                 {result.distanceKm !== null && (
@@ -1339,74 +767,102 @@ function CompanyResultGrid({
                 )}
               </div>
 
-              {shouldShowPlanBadge(company) && (
-                <div
-                  className={`absolute right-5 top-5 rounded-full border px-3 py-1 text-xs font-black backdrop-blur ${getPlanBadgeClassName(
-                    company.plan
-                  )}`}
-                >
-                  {getCompanyPlanLabel(company.plan)}
-                </div>
-              )}
+              <div
+                className={`absolute right-5 top-5 rounded-full border px-3 py-1 text-xs font-black backdrop-blur ${getPlanBadgeClassName(
+                  result.planKey
+                )}`}
+              >
+                {result.primaryBadge}
+              </div>
             </div>
 
-            <div className="p-6">
+            <div className="flex flex-1 flex-col p-6">
               <div className="flex flex-wrap gap-2">
-                {displayedSubCategories.slice(0, 4).map((subCategory) => (
+                {secondaryBadges.slice(0, 4).map((badge, badgeIndex) => (
                   <span
-                    key={subCategory}
+                    key={`${normalizeKey(badge)}-${badgeIndex}`}
                     className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100"
                   >
-                    {subCategory}
+                    {badge}
                   </span>
                 ))}
 
-                {displayedSubCategories.length > 4 && (
-                  <span className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold text-slate-300">
-                    +{displayedSubCategories.length - 4} weitere
+                {result.isHighlighted && (
+                  <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-black text-amber-100">
+                    Hervorgehoben
                   </span>
                 )}
               </div>
 
-              <h2 className="mt-5 text-2xl font-black tracking-tight">
-                {company.name}
+              <p className="mt-5 break-words text-sm font-black uppercase tracking-wide text-slate-500">
+                {result.subtitle}
+              </p>
+
+              <h2 className="mt-2 break-words text-2xl font-black tracking-tight">
+                {result.title}
               </h2>
 
-              <p className="mt-4 text-slate-300">{company.description}</p>
+              <p className="mt-3 break-words text-sm font-semibold text-slate-400">
+                📍 {result.city || "Region"}
+              </p>
 
-              {advertisingVisible && company.ad && (
+              <p className="mt-4 line-clamp-3 break-words text-slate-300">
+                {result.description || "Weitere Informationen folgen."}
+              </p>
+
+              {result.ad && (
                 <div className="mt-5 rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5">
                   <p className="text-xs font-black uppercase tracking-wide text-cyan-200">
                     Anzeige
                   </p>
 
-                  <h3 className="mt-2 font-black text-white">
-                    {company.ad.title}
+                  <h3 className="mt-2 break-words font-black text-white">
+                    {result.ad.title}
                   </h3>
 
-                  <p className="mt-1 text-sm text-slate-300">
-                    {company.ad.description}
+                  <p className="mt-1 break-words text-sm text-slate-300">
+                    {result.ad.description}
                   </p>
 
                   <div className="mt-4 inline-flex rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-2 text-sm font-black text-slate-950">
-                    {company.ad.cta}
+                    {result.ad.cta}
                   </div>
                 </div>
               )}
 
-              <div className="mt-5 flex flex-wrap gap-2">
-                {company.tags.slice(0, 4).map((tag) => (
-                  <span
-                    key={tag}
-                    className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-medium text-slate-300"
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              {reasons.length > 0 && (
+                <div className="mt-5 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
+                  <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+                    Warum dieser Treffer?
+                  </p>
 
-              <div className="mt-6 inline-flex rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-950 transition group-hover:bg-cyan-300">
-                Firma ansehen
+                  <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                    {reasons.slice(0, 3).map((reason, reasonIndex) => (
+                      <li key={`${normalizeKey(reason)}-${reasonIndex}`}>
+                        • {reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {resultTags.length > 0 && (
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {resultTags.slice(0, 4).map((tag, tagIndex) => (
+                    <span
+                      key={`${normalizeKey(tag)}-${tagIndex}`}
+                      className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-medium text-slate-300"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-auto pt-6">
+                <div className="inline-flex rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-950 transition group-hover:bg-cyan-300">
+                  {result.cta}
+                </div>
               </div>
             </div>
           </Link>
@@ -1416,3 +872,59 @@ function CompanyResultGrid({
   );
 }
 
+function NoResultsBox({ query }: { query: string }) {
+  const cleanedQuery = query.trim();
+
+  return (
+    <div className="mt-12 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20">
+      <div className="max-w-3xl">
+        <p className="text-sm font-bold uppercase tracking-wide text-cyan-300">
+          Keine Treffer
+        </p>
+
+        <h2 className="mt-3 text-3xl font-black">
+          Noch kein passender Treffer gefunden
+        </h2>
+
+        <p className="mt-4 leading-7 text-slate-300">
+          Diese Suche ist trotzdem wertvoll: Wenn mehrere Nutzer nach ähnlichen
+          Angeboten suchen, erkennt Locario daraus konkrete Nachfrage für neue
+          Firmen, Events oder Kategorien.
+        </p>
+
+        {cleanedQuery && (
+          <div className="mt-6 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-5">
+            <p className="font-bold text-cyan-100">Gesuchte Nachfrage</p>
+
+            <p className="mt-2 break-words text-sm text-slate-300">
+              {cleanedQuery}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-6 grid gap-3 md:grid-cols-3">
+          <Link
+            href="/firmen"
+            className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+          >
+            Alle Firmen ansehen
+          </Link>
+
+          <Link
+            href="/events"
+            className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+          >
+            Alle Events ansehen
+          </Link>
+
+          <Link
+            href="/fuer-firmen"
+            className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
+          >
+            Firma/Event eintragen
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}

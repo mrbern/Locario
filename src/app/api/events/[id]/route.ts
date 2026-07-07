@@ -19,7 +19,13 @@ type EventRequestBody = {
   locationName?: string;
   address?: string;
 
+  latitude?: number | null;
+  longitude?: number | null;
+
   description?: string;
+
+  tags?: string[];
+  searchTerms?: string[];
 
   startsAt?: string;
   endsAt?: string;
@@ -55,6 +61,101 @@ function parseDate(value: string | undefined) {
   return date;
 }
 
+function getValidCoordinate(value: number | null | undefined) {
+  if (typeof value !== "number") {
+    return null;
+  }
+
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  return value;
+}
+
+function getUpdatedRequiredString(value: string | undefined, fallback: string) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return value.trim();
+}
+
+function getUpdatedNullableString(
+  value: string | undefined,
+  fallback: string | null
+) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return value.trim() || null;
+}
+
+function getUpdatedCoordinate(
+  value: number | null | undefined,
+  fallback: number | null
+) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return getValidCoordinate(value);
+}
+
+function getStringArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item.trim();
+      }
+
+      if (typeof item === "number" || typeof item === "boolean") {
+        return String(item).trim();
+      }
+
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function parseStoredStringArray(value: string | null) {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => {
+          if (typeof item === "string") {
+            return item.trim();
+          }
+
+          if (typeof item === "number" || typeof item === "boolean") {
+            return String(item).trim();
+          }
+
+          return "";
+        })
+        .filter(Boolean);
+    }
+  } catch {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function mapEvent(event: {
   id: string;
   title: string;
@@ -65,7 +166,11 @@ function mapEvent(event: {
   city: string;
   locationName: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   description: string;
+  tags: string;
+  searchTerms: string;
   startsAt: Date;
   endsAt: Date | null;
   website: string | null;
@@ -85,7 +190,11 @@ function mapEvent(event: {
     city: event.city,
     locationName: event.locationName ?? "",
     address: event.address ?? "",
+    latitude: event.latitude,
+    longitude: event.longitude,
     description: event.description,
+    tags: parseStoredStringArray(event.tags),
+    searchTerms: parseStoredStringArray(event.searchTerms),
     startsAt: event.startsAt.toISOString(),
     endsAt: event.endsAt?.toISOString() ?? "",
     website: event.website ?? "",
@@ -164,16 +273,40 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const body = (await request.json()) as EventRequestBody;
 
-  const startsAt = parseDate(body.startsAt);
-  const endsAt = parseDate(body.endsAt);
-  const highlightUntil = parseDate(body.highlightUntil);
+  const title = getUpdatedRequiredString(body.title, existingEvent.title);
+  const organizerName = getUpdatedRequiredString(
+    body.organizerName,
+    existingEvent.organizerName
+  );
+  const category = getUpdatedRequiredString(
+    body.category,
+    existingEvent.category
+  );
+  const city = getUpdatedRequiredString(body.city, existingEvent.city);
+  const description = getUpdatedRequiredString(
+    body.description,
+    existingEvent.description
+  );
+
+  const startsAt =
+    body.startsAt === undefined
+      ? existingEvent.startsAt
+      : parseDate(body.startsAt);
+
+  const endsAt =
+    body.endsAt === undefined ? existingEvent.endsAt : parseDate(body.endsAt);
+
+  const highlightUntil =
+    body.highlightUntil === undefined
+      ? existingEvent.highlightUntil
+      : parseDate(body.highlightUntil);
 
   if (
-    !body.title?.trim() ||
-    !body.organizerName?.trim() ||
-    !body.category?.trim() ||
-    !body.city?.trim() ||
-    !body.description?.trim() ||
+    !title ||
+    !organizerName ||
+    !category ||
+    !city ||
+    !description ||
     !startsAt
   ) {
     return NextResponse.json(
@@ -187,28 +320,55 @@ export async function PUT(request: Request, context: RouteContext) {
     );
   }
 
+  const tags =
+    body.tags === undefined
+      ? parseStoredStringArray(existingEvent.tags)
+      : getStringArray(body.tags);
+
+  const searchTerms =
+    body.searchTerms === undefined
+      ? parseStoredStringArray(existingEvent.searchTerms)
+      : getStringArray(body.searchTerms);
+
   const updatedEvent = await prisma.event.update({
     where: {
       id,
     },
     data: {
-      title: body.title.trim(),
-      imageUrl:
-        body.imageUrl !== undefined
-          ? body.imageUrl.trim() || null
-          : existingEvent.imageUrl,
-      organizerName: body.organizerName.trim(),
-      category: body.category.trim(),
+      title,
+      imageUrl: getUpdatedNullableString(body.imageUrl, existingEvent.imageUrl),
+
+      organizerName,
+      category,
       plan: getValidPlan(body.plan, existingEvent.plan),
-      city: body.city.trim(),
-      locationName: body.locationName?.trim() || null,
-      address: body.address?.trim() || null,
-      description: body.description.trim(),
+
+      city,
+      locationName: getUpdatedNullableString(
+        body.locationName,
+        existingEvent.locationName
+      ),
+      address: getUpdatedNullableString(body.address, existingEvent.address),
+
+      latitude: getUpdatedCoordinate(body.latitude, existingEvent.latitude),
+      longitude: getUpdatedCoordinate(body.longitude, existingEvent.longitude),
+
+      description,
+
+      tags: JSON.stringify(tags),
+      searchTerms: JSON.stringify(searchTerms),
+
       startsAt,
       endsAt,
-      website: body.website?.trim() || null,
-      ticketUrl: body.ticketUrl?.trim() || null,
-      isActive: body.isActive ?? existingEvent.isActive,
+
+      website: getUpdatedNullableString(body.website, existingEvent.website),
+      ticketUrl: getUpdatedNullableString(
+        body.ticketUrl,
+        existingEvent.ticketUrl
+      ),
+
+      isActive:
+        body.isActive === undefined ? existingEvent.isActive : body.isActive,
+
       highlightUntil,
     },
   });
