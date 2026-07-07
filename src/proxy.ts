@@ -42,8 +42,28 @@ function isProtectedApiRoute(request: NextRequest) {
     return true;
   }
 
+  if (pathname === "/api/event-inquiries") {
+    return method === "GET";
+  }
+
+  if (pathname.startsWith("/api/event-inquiries/")) {
+    return true;
+  }
+
+  if (pathname === "/api/events") {
+    return method !== "GET";
+  }
+
+  if (pathname.startsWith("/api/events/")) {
+    return method !== "GET";
+  }
+
   if (pathname === "/api/leads") {
     return method === "GET";
+  }
+
+  if (pathname.startsWith("/api/leads/")) {
+    return true;
   }
 
   if (pathname === "/api/search-logs") {
@@ -52,6 +72,10 @@ function isProtectedApiRoute(request: NextRequest) {
 
   if (pathname.startsWith("/api/search-logs/")) {
     return method === "GET";
+  }
+
+  if (pathname.startsWith("/api/uploads/")) {
+    return true;
   }
 
   return false;
@@ -68,7 +92,7 @@ function createUnauthorizedApiResponse() {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isProtectedAdminPage(pathname)) {
@@ -101,10 +125,14 @@ export const config = {
     "/api/companies/:path*",
     "/api/company-inquiries",
     "/api/company-inquiries/:path*",
+    "/api/event-inquiries",
+    "/api/event-inquiries/:path*",
+    "/api/events",
+    "/api/events/:path*",
     "/api/leads",
     "/api/leads/:path*",
     "/api/search-logs",
     "/api/search-logs/:path*",
+    "/api/uploads/:path*",
   ],
 };
-
