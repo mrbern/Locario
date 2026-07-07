@@ -31,6 +31,8 @@ type SearchLogStatsResponse = {
 };
 
 type AnalysisView = "opportunities" | "top" | "zero_logs" | "all_logs";
+type OpportunityLevel = "high" | "medium" | "low";
+type DemandType = "event" | "company" | "mixed";
 
 const emptySearchStats: SearchLogStatsResponse = {
   totalSearches: 0,
@@ -41,6 +43,53 @@ const emptySearchStats: SearchLogStatsResponse = {
 };
 
 const itemsPerPage = 25;
+
+const eventDemandWords = [
+  "event",
+  "events",
+  "veranstaltung",
+  "veranstaltungen",
+  "anlass",
+  "anlaesse",
+  "anlässe",
+  "konzert",
+  "musik",
+  "live",
+  "livemusik",
+  "party",
+  "festival",
+  "markt",
+  "maerit",
+  "märit",
+  "flohmarkt",
+  "kurs",
+  "workshop",
+  "theater",
+  "comedy",
+  "ausstellung",
+  "wochenende",
+  "weekend",
+];
+
+const companyDemandWords = [
+  "firma",
+  "firmen",
+  "anbieter",
+  "restaurant",
+  "coiffeur",
+  "garage",
+  "werkstatt",
+  "elektriker",
+  "bäckerei",
+  "baeckerei",
+  "cafe",
+  "arzt",
+  "praxis",
+  "handwerker",
+  "kaufen",
+  "service",
+  "reparatur",
+];
 
 const analysisViews: {
   value: AnalysisView;
@@ -69,35 +118,114 @@ const analysisViews: {
   },
 ];
 
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function getSafeNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsedNumber = Number(value);
+
+    if (Number.isFinite(parsedNumber)) {
+      return parsedNumber;
+    }
+  }
+
+  return fallback;
+}
+
+function normalizeText(value: unknown) {
+  return getSafeString(value)
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeKey(value: unknown) {
+  return normalizeText(value).replace(/\s+/g, "-") || "leer";
+}
+
+function formatDecimal(value: number) {
+  return new Intl.NumberFormat("de-CH", {
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatDate(dateValue: string | null | undefined) {
+  if (!dateValue) {
+    return "Nicht angegeben";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Ungültiges Datum";
+  }
+
+  return date.toLocaleString("de-CH", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function getSearchLogSearchText(searchLog: SearchLog) {
-  return [
-    searchLog.query,
-    searchLog.normalizedQuery,
-    searchLog.resultCount.toString(),
-    searchLog.createdAt,
-  ]
-    .join(" ")
-    .toLowerCase();
+  return normalizeText(
+    [
+      searchLog.query,
+      searchLog.normalizedQuery,
+      searchLog.resultCount,
+      searchLog.createdAt,
+    ].join(" "),
+  );
 }
 
 function getSearchStatSearchText(item: SearchLogStat) {
-  return [
-    item.latestQuery,
-    item.normalizedQuery,
-    item.searchCount.toString(),
-    item.zeroResultCount.toString(),
-    item.latestResultCount.toString(),
-  ]
-    .join(" ")
-    .toLowerCase();
+  return normalizeText(
+    [
+      item.latestQuery,
+      item.normalizedQuery,
+      item.searchCount,
+      item.zeroResultCount,
+      item.latestResultCount,
+      item.averageResultCount,
+      getDemandTypeLabel(getDemandType(item)),
+    ].join(" "),
+  );
 }
 
-function getOpportunityLevel(item: SearchLogStat) {
-  if (item.zeroResultCount >= 5 || item.latestResultCount === 0) {
+function getOpportunityLevel(item: SearchLogStat): OpportunityLevel {
+  const zeroResultCount = getSafeNumber(item.zeroResultCount);
+  const latestResultCount = getSafeNumber(item.latestResultCount);
+  const averageResultCount = getSafeNumber(item.averageResultCount);
+  const searchCount = getSafeNumber(item.searchCount);
+
+  if (zeroResultCount >= 5 || (searchCount >= 2 && latestResultCount === 0)) {
     return "high";
   }
 
-  if (item.averageResultCount <= 2) {
+  if (latestResultCount === 0 || averageResultCount <= 2) {
     return "medium";
   }
 
@@ -132,6 +260,136 @@ function getOpportunityClassName(item: SearchLogStat) {
   return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
 }
 
+function getOpportunityReason(item: SearchLogStat) {
+  const level = getOpportunityLevel(item);
+  const zeroResultCount = getSafeNumber(item.zeroResultCount);
+  const latestResultCount = getSafeNumber(item.latestResultCount);
+  const averageResultCount = getSafeNumber(item.averageResultCount);
+
+  if (level === "high") {
+    if (zeroResultCount >= 5) {
+      return "Wurde mehrfach ohne Treffer gesucht. Priorität für Akquise oder neue Kategorie.";
+    }
+
+    return "Aktuelle Suche hatte keine Treffer und wurde bereits mehrfach gesucht.";
+  }
+
+  if (level === "medium") {
+    if (latestResultCount === 0) {
+      return "Letzte Suche hatte keine Treffer. Prüfen, ob passende Anbieter fehlen.";
+    }
+
+    return `Wenig Abdeckung mit Ø ${formatDecimal(
+      averageResultCount,
+    )} Treffern. Kategorie oder Suchbegriffe prüfen.`;
+  }
+
+  return "Nachfrage vorhanden. Weiter beobachten und bei Wiederholung akquirieren.";
+}
+
+function textContainsAnyWord(text: string, words: string[]) {
+  const normalizedText = ` ${normalizeText(text)} `;
+
+  return words.some((word) => {
+    const normalizedWord = normalizeText(word);
+
+    return normalizedWord && normalizedText.includes(` ${normalizedWord} `);
+  });
+}
+
+function getDemandType(item: SearchLogStat): DemandType {
+  const searchText = [item.latestQuery, item.normalizedQuery].join(" ");
+  const hasEventDemand = textContainsAnyWord(searchText, eventDemandWords);
+  const hasCompanyDemand = textContainsAnyWord(searchText, companyDemandWords);
+
+  if (hasEventDemand && hasCompanyDemand) {
+    return "mixed";
+  }
+
+  if (hasEventDemand) {
+    return "event";
+  }
+
+  return hasCompanyDemand ? "company" : "mixed";
+}
+
+function getDemandTypeLabel(type: DemandType) {
+  if (type === "event") {
+    return "Event-Nachfrage";
+  }
+
+  if (type === "company") {
+    return "Firmen-Nachfrage";
+  }
+
+  return "Gemischt prüfen";
+}
+
+function getDemandTypeClassName(type: DemandType) {
+  if (type === "event") {
+    return "border-purple-300/25 bg-purple-300/10 text-purple-100";
+  }
+
+  if (type === "company") {
+    return "border-cyan-300/25 bg-cyan-300/10 text-cyan-100";
+  }
+
+  return "border-slate-300/20 bg-slate-300/10 text-slate-200";
+}
+
+function getPublicSearchHref(query: string) {
+  const cleanedQuery = query.trim();
+
+  if (!cleanedQuery) {
+    return "/suche";
+  }
+
+  return `/suche?q=${encodeURIComponent(cleanedQuery)}`;
+}
+
+function getGoogleSearchHref(query: string) {
+  const cleanedQuery = query.trim();
+
+  return `https://www.google.com/search?q=${encodeURIComponent(cleanedQuery)}`;
+}
+
+function sortSearchStats(firstItem: SearchLogStat, secondItem: SearchLogStat) {
+  const firstLevel = getOpportunityLevel(firstItem);
+  const secondLevel = getOpportunityLevel(secondItem);
+  const levelRanks: Record<OpportunityLevel, number> = {
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+
+  const levelDifference = levelRanks[firstLevel] - levelRanks[secondLevel];
+
+  if (levelDifference !== 0) {
+    return levelDifference;
+  }
+
+  const zeroResultDifference =
+    getSafeNumber(secondItem.zeroResultCount) -
+    getSafeNumber(firstItem.zeroResultCount);
+
+  if (zeroResultDifference !== 0) {
+    return zeroResultDifference;
+  }
+
+  const searchCountDifference =
+    getSafeNumber(secondItem.searchCount) -
+    getSafeNumber(firstItem.searchCount);
+
+  if (searchCountDifference !== 0) {
+    return searchCountDifference;
+  }
+
+  return (
+    new Date(secondItem.latestAt).getTime() -
+    new Date(firstItem.latestAt).getTime()
+  );
+}
+
 export default function AdminSearchLogsPage() {
   const [searchLogs, setSearchLogs] = useState<SearchLog[]>([]);
   const [searchStats, setSearchStats] =
@@ -144,6 +402,7 @@ export default function AdminSearchLogsPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [copiedText, setCopiedText] = useState("");
 
   useEffect(() => {
     loadSearchData();
@@ -167,15 +426,27 @@ export default function AdminSearchLogsPage() {
     }
 
     const totalResults = searchLogs.reduce((sum, searchLog) => {
-      return sum + searchLog.resultCount;
+      return sum + getSafeNumber(searchLog.resultCount);
     }, 0);
 
     return Math.round((totalResults / searchLogs.length) * 10) / 10;
   }, [searchLogs]);
 
+  const highOpportunityCount = useMemo(() => {
+    return searchStats.acquisitionOpportunities.filter((item) => {
+      return getOpportunityLevel(item) === "high";
+    }).length;
+  }, [searchStats.acquisitionOpportunities]);
+
+  const eventOpportunityCount = useMemo(() => {
+    return searchStats.acquisitionOpportunities.filter((item) => {
+      return getDemandType(item) === "event";
+    }).length;
+  }, [searchStats.acquisitionOpportunities]);
+
   const statItems = useMemo(() => {
     if (selectedView === "opportunities") {
-      return searchStats.acquisitionOpportunities;
+      return [...searchStats.acquisitionOpportunities].sort(sortSearchStats);
     }
 
     if (selectedView === "top") {
@@ -183,10 +454,14 @@ export default function AdminSearchLogsPage() {
     }
 
     return [];
-  }, [searchStats.acquisitionOpportunities, searchStats.topSearches, selectedView]);
+  }, [
+    searchStats.acquisitionOpportunities,
+    searchStats.topSearches,
+    selectedView,
+  ]);
 
   const filteredStatItems = useMemo(() => {
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    const normalizedSearchQuery = normalizeText(searchQuery);
 
     return statItems.filter((item) => {
       return (
@@ -197,7 +472,7 @@ export default function AdminSearchLogsPage() {
   }, [statItems, searchQuery]);
 
   const filteredSearchLogs = useMemo(() => {
-    const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+    const normalizedSearchQuery = normalizeText(searchQuery);
 
     return searchLogs
       .filter((searchLog) => {
@@ -229,12 +504,12 @@ export default function AdminSearchLogsPage() {
 
   const paginatedStatItems = filteredStatItems.slice(
     (safeCurrentPage - 1) * itemsPerPage,
-    safeCurrentPage * itemsPerPage
+    safeCurrentPage * itemsPerPage,
   );
 
   const paginatedSearchLogs = filteredSearchLogs.slice(
     (safeCurrentPage - 1) * itemsPerPage,
-    safeCurrentPage * itemsPerPage
+    safeCurrentPage * itemsPerPage,
   );
 
   const hasActiveFilters = searchQuery || selectedView !== "opportunities";
@@ -262,17 +537,50 @@ export default function AdminSearchLogsPage() {
       }
 
       const logsData = (await logsResponse.json()) as SearchLog[];
-      const statsData =
-        (await statsResponse.json()) as SearchLogStatsResponse;
+      const statsData = (await statsResponse.json()) as SearchLogStatsResponse;
 
-      setSearchLogs(logsData);
-      setSearchStats(statsData);
-    } catch {
-      setErrorMessage(
-        "Die Suchdaten konnten nicht aus der Datenbank geladen werden."
-      );
+      setSearchLogs(Array.isArray(logsData) ? logsData : []);
+      setSearchStats({
+        ...emptySearchStats,
+        ...statsData,
+        topSearches: Array.isArray(statsData.topSearches)
+          ? statsData.topSearches
+          : [],
+        acquisitionOpportunities: Array.isArray(
+          statsData.acquisitionOpportunities,
+        )
+          ? statsData.acquisitionOpportunities
+          : [],
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage(
+          "Die Suchdaten konnten nicht aus der Datenbank geladen werden.",
+        );
+      }
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function copySearchTerm(value: string) {
+    const cleanedValue = value.trim();
+
+    if (!cleanedValue) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(cleanedValue);
+      setCopiedText(cleanedValue);
+
+      setTimeout(() => {
+        setCopiedText("");
+      }, 2500);
+    } catch {
+      setErrorMessage("Suchbegriff konnte nicht kopiert werden.");
     }
   }
 
@@ -280,16 +588,6 @@ export default function AdminSearchLogsPage() {
     setSearchQuery("");
     setSelectedView("opportunities");
     setCurrentPage(1);
-  }
-
-  function formatDate(dateValue: string) {
-    return new Date(dateValue).toLocaleString("de-CH", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   }
 
   return (
@@ -311,7 +609,7 @@ export default function AdminSearchLogsPage() {
           <p className="mt-5 max-w-3xl text-slate-300">
             Suchdaten zeigen dir, was Nutzer wirklich brauchen. Besonders
             wertvoll sind Suchbegriffe ohne Treffer: Dort fehlen passende
-            Anbieter auf Locario.
+            Anbieter, Events oder Suchbegriffe auf Locario.
           </p>
         </div>
 
@@ -325,18 +623,12 @@ export default function AdminSearchLogsPage() {
         </button>
       </div>
 
-      <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-        <CompactMetric
-          label="Suchanfragen"
-          value={searchStats.totalSearches}
-        />
-        <CompactMetric
-          label="Eindeutig"
-          value={searchStats.uniqueSearches}
-        />
+      <div className="mt-8 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <CompactMetric label="Suchanfragen" value={searchStats.totalSearches} />
+        <CompactMetric label="Eindeutig" value={searchStats.uniqueSearches} />
         <CompactMetric
           label="0-Treffer"
-          value={searchStats.zeroResultSearches}
+          value={searchStats.zeroResultSearches || zeroResultLogs.length}
           variant="red"
         />
         <CompactMetric
@@ -345,15 +637,26 @@ export default function AdminSearchLogsPage() {
           variant="emerald"
         />
         <CompactMetric
-          label="Ø Treffer"
-          value={averageResults}
+          label="Hohe Chancen"
+          value={highOpportunityCount}
           variant="amber"
+        />
+        <CompactMetric
+          label="Event-Chancen"
+          value={eventOpportunityCount}
+          variant="purple"
         />
       </div>
 
       {errorMessage && (
         <div className="mt-6 rounded-3xl border border-red-400/30 bg-red-400/10 p-5 text-red-200">
           {errorMessage}
+        </div>
+      )}
+
+      {copiedText && (
+        <div className="mt-6 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 text-emerald-200">
+          Suchbegriff kopiert: <span className="font-black">{copiedText}</span>
         </div>
       )}
 
@@ -378,6 +681,13 @@ export default function AdminSearchLogsPage() {
               className="rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-4 py-3 text-center text-sm font-black text-slate-950 transition hover:-translate-y-0.5"
             >
               Firmenverwaltung
+            </Link>
+
+            <Link
+              href="/admin/events"
+              className="rounded-2xl border border-purple-300/30 px-4 py-3 text-center text-sm font-black text-purple-100 transition hover:bg-purple-300/10"
+            >
+              Eventverwaltung
             </Link>
 
             {hasActiveFilters && (
@@ -421,13 +731,14 @@ export default function AdminSearchLogsPage() {
             label="Suche"
             value={searchQuery}
             onChange={setSearchQuery}
-            placeholder="Suchbegriff, normalisierte Suche, Trefferzahl..."
+            placeholder="Suchbegriff, Nachfrage-Typ, normalisierte Suche, Trefferzahl..."
           />
 
-          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
-            Suchanalyse = nicht verwalten, sondern Nachfrage verstehen. Wenn
-            ein Begriff oft gesucht wird und wenig Treffer hat, ist das ein
-            Hinweis für Firmenakquise oder neue Kategorien.
+          <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm leading-6 text-slate-400">
+            Suchanalyse = nicht verwalten, sondern Nachfrage verstehen. Wenn ein
+            Begriff oft gesucht wird und wenig Treffer hat, ist das ein Hinweis
+            für Firmenakquise, Eventakquise, neue Kategorien oder bessere
+            Suchbegriffe.
           </div>
         </div>
 
@@ -464,12 +775,13 @@ export default function AdminSearchLogsPage() {
           (selectedView === "opportunities" || selectedView === "top") &&
           paginatedStatItems.length > 0 && (
             <div className="mt-5 grid gap-3">
-              {paginatedStatItems.map((item) => {
+              {paginatedStatItems.map((item, itemIndex) => {
                 const isOpportunityView = selectedView === "opportunities";
+                const demandType = getDemandType(item);
 
                 return (
                   <article
-                    key={item.normalizedQuery}
+                    key={`${normalizeKey(item.normalizedQuery)}-${itemIndex}`}
                     className={`rounded-3xl border p-4 transition ${
                       isOpportunityView
                         ? getOpportunityClassName(item)
@@ -489,14 +801,28 @@ export default function AdminSearchLogsPage() {
                             </span>
                           )}
 
+                          <span
+                            className={`rounded-full border px-3 py-1 text-xs font-black ${getDemandTypeClassName(
+                              demandType,
+                            )}`}
+                          >
+                            {getDemandTypeLabel(demandType)}
+                          </span>
+
                           <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
                             {item.searchCount}x gesucht
                           </span>
                         </div>
 
-                        <p className="mt-2 text-sm text-slate-300">
+                        <p className="mt-2 break-words text-sm text-slate-300">
                           Normalisiert: {item.normalizedQuery}
                         </p>
+
+                        {isOpportunityView && (
+                          <p className="mt-2 text-sm leading-6 text-slate-300">
+                            {getOpportunityReason(item)}
+                          </p>
+                        )}
 
                         <p className="mt-2 text-xs text-slate-500">
                           Zuletzt gesucht: {formatDate(item.latestAt)}
@@ -514,24 +840,50 @@ export default function AdminSearchLogsPage() {
                         />
                         <InfoLine
                           label="Ø Treffer"
-                          value={item.averageResultCount.toString()}
+                          value={formatDecimal(item.averageResultCount)}
                         />
                       </div>
 
                       <div className="flex flex-wrap gap-2 xl:justify-end">
                         <Link
-                          href="/admin/firmen"
-                          className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                          href={getPublicSearchHref(item.latestQuery)}
+                          className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10"
                         >
-                          Firma suchen
+                          Suche testen
                         </Link>
 
-                        <Link
-                          href="/admin/firmenanfragen"
+                        <button
+                          type="button"
+                          onClick={() => copySearchTerm(item.latestQuery)}
                           className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
                         >
-                          Inbox prüfen
-                        </Link>
+                          Kopieren
+                        </button>
+
+                        <a
+                          href={getGoogleSearchHref(item.latestQuery)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                        >
+                          Web prüfen
+                        </a>
+
+                        {demandType === "event" ? (
+                          <Link
+                            href="/admin/events"
+                            className="rounded-xl border border-purple-300/30 px-3 py-2 text-xs font-black text-purple-100 transition hover:bg-purple-300/10"
+                          >
+                            Events
+                          </Link>
+                        ) : (
+                          <Link
+                            href="/admin/firmen"
+                            className="rounded-xl border border-cyan-300/30 px-3 py-2 text-xs font-black text-cyan-100 transition hover:bg-cyan-300/10"
+                          >
+                            Firmen
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -552,17 +904,17 @@ export default function AdminSearchLogsPage() {
                       <th className="px-4 py-3">Normalisiert</th>
                       <th className="px-4 py-3">Treffer</th>
                       <th className="px-4 py-3">Zeitpunkt</th>
-                      <th className="px-4 py-3 text-right">Hinweis</th>
+                      <th className="px-4 py-3 text-right">Aktion</th>
                     </tr>
                   </thead>
 
                   <tbody>
-                    {paginatedSearchLogs.map((searchLog) => {
+                    {paginatedSearchLogs.map((searchLog, searchLogIndex) => {
                       const hasNoResults = searchLog.resultCount === 0;
 
                       return (
                         <tr
-                          key={searchLog.id}
+                          key={`${searchLog.id}-${searchLogIndex}`}
                           className={`border-b border-white/10 transition last:border-b-0 hover:bg-white/[0.04] ${
                             hasNoResults ? "bg-red-300/10" : "bg-slate-950/35"
                           }`}
@@ -595,16 +947,23 @@ export default function AdminSearchLogsPage() {
                             {formatDate(searchLog.createdAt)}
                           </td>
 
-                          <td className="px-4 py-4 text-right">
-                            {hasNoResults ? (
-                              <span className="text-xs font-black text-red-100">
-                                Akquise prüfen
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-500">
-                                Nachfrage vorhanden
-                              </span>
-                            )}
+                          <td className="px-4 py-4">
+                            <div className="flex justify-end gap-2">
+                              <Link
+                                href={getPublicSearchHref(searchLog.query)}
+                                className="rounded-xl border border-emerald-300/30 px-3 py-2 text-xs font-black text-emerald-100 transition hover:bg-emerald-300/10"
+                              >
+                                Testen
+                              </Link>
+
+                              <button
+                                type="button"
+                                onClick={() => copySearchTerm(searchLog.query)}
+                                className="rounded-xl border border-white/15 px-3 py-2 text-xs font-black text-white transition hover:border-cyan-300/30 hover:bg-white/10"
+                              >
+                                Kopieren
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -656,7 +1015,7 @@ function CompactMetric({
 }: {
   label: string;
   value: number;
-  variant?: "cyan" | "emerald" | "amber" | "red";
+  variant?: "cyan" | "emerald" | "amber" | "red" | "purple";
 }) {
   const valueClassName =
     variant === "emerald"
@@ -665,7 +1024,9 @@ function CompactMetric({
         ? "text-amber-200"
         : variant === "red"
           ? "text-red-200"
-          : "text-cyan-200";
+          : variant === "purple"
+            ? "text-purple-200"
+            : "text-cyan-200";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 shadow-xl shadow-slate-950/10">

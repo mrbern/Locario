@@ -100,8 +100,121 @@ const planOptions: PlanOption[] = [
   },
 ];
 
-function normalizeText(value: string) {
-  return value.toLowerCase().trim();
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function normalizeText(value: unknown) {
+  return getSafeString(value)
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function normalizeKey(value: unknown) {
+  return normalizeText(value).replace(/[^a-z0-9]+/g, "-") || "wert";
+}
+
+function getSafeStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => getSafeString(item).trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    const trimmedValue = value.trim();
+
+    if (!trimmedValue) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmedValue);
+
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((item) => getSafeString(item).trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmedValue
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function uniqueValues(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueItems: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+    const normalizedValue = normalizeText(cleanValue);
+
+    if (!cleanValue || !normalizedValue || seenValues.has(normalizedValue)) {
+      return;
+    }
+
+    seenValues.add(normalizedValue);
+    uniqueItems.push(cleanValue);
+  });
+
+  return uniqueItems;
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeText(value);
+  const normalizedCity = normalizeText(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getInquiryLocationLine(inquiry: EventInquiry) {
+  const city = getSafeString(inquiry.city).trim();
+  const address = getSafeString(inquiry.address).trim();
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
+function getExternalHref(value: string | null | undefined) {
+  const cleanedValue = getSafeString(value).trim();
+
+  if (!cleanedValue) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(cleanedValue)) {
+    return cleanedValue;
+  }
+
+  return `https://${cleanedValue}`;
 }
 
 function getInquirySearchText(inquiry: EventInquiry) {
@@ -120,7 +233,7 @@ function getInquirySearchText(inquiry: EventInquiry) {
       inquiry.locationName,
       inquiry.description,
       inquiry.message,
-      ...inquiry.tags,
+      ...getSafeStringArray(inquiry.tags),
     ].join(" ")
   );
 }
@@ -196,7 +309,13 @@ function formatDateTime(value: string | null | undefined) {
     return "Nicht angegeben";
   }
 
-  return new Date(value).toLocaleString("de-CH", {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Nicht angegeben";
+  }
+
+  return date.toLocaleString("de-CH", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
@@ -211,7 +330,13 @@ function formatDate(value: string | null | undefined) {
     return "Nicht angegeben";
   }
 
-  return new Date(value).toLocaleDateString("de-CH", {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Nicht angegeben";
+  }
+
+  return date.toLocaleDateString("de-CH", {
     weekday: "short",
     day: "2-digit",
     month: "2-digit",
@@ -443,11 +568,13 @@ export default function AdminEventInquiriesPage() {
       setErrorMessage("");
       setLatestPublishedEvent(null);
 
-      const tags = inquiry.tags ?? [];
-      const searchTerms = getAutomaticEventSearchTerms({
-        category: inquiry.category || "Sonstiges",
-        tags,
-      });
+      const tags = uniqueValues(getSafeStringArray(inquiry.tags));
+      const searchTerms = uniqueValues(
+        getAutomaticEventSearchTerms({
+          category: inquiry.category || "Sonstiges",
+          tags,
+        })
+      );
 
       const response = await fetch("/api/events", {
         method: "POST",
@@ -464,7 +591,7 @@ export default function AdminEventInquiriesPage() {
 
           city: inquiry.city,
           locationName: inquiry.locationName,
-          address: inquiry.address || "",
+          address: getSafeString(inquiry.address),
 
           description: inquiry.description,
 
@@ -799,9 +926,8 @@ export default function AdminEventInquiriesPage() {
                       </div>
 
                       <p className="mt-2 text-sm text-slate-300">
-                        {inquiry.city}
-                        {inquiry.address ? ` · ${inquiry.address}` : ""} ·{" "}
-                        {inquiry.category} · {formatDate(inquiry.eventDate)}
+                        {getInquiryLocationLine(inquiry)} · {inquiry.category} ·{" "}
+                        {formatDate(inquiry.eventDate)}
                       </p>
 
                       {!eventCanBeCreated && !isClosed && (
@@ -965,6 +1091,7 @@ function EventInquiryDrawer({
   const eventCanBeCreated = Boolean(inquiry.eventDate);
   const isClosed =
     inquiry.status === "approved" || inquiry.status === "rejected";
+  const tags = uniqueValues(getSafeStringArray(inquiry.tags));
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm">
@@ -1114,7 +1241,7 @@ function EventInquiryDrawer({
 
                   {inquiry.website && (
                     <a
-                      href={inquiry.website}
+                      href={getExternalHref(inquiry.website)}
                       target="_blank"
                       rel="noreferrer"
                       className="rounded-2xl border border-white/15 px-4 py-3 text-center text-sm font-black text-white transition hover:border-amber-300/30 hover:bg-white/10"
@@ -1198,16 +1325,16 @@ function EventInquiryDrawer({
                 </p>
               </section>
 
-              {inquiry.tags.length > 0 && (
+              {tags.length > 0 && (
                 <section>
                   <p className="text-xs font-black uppercase tracking-wide text-slate-500">
                     Tags / Suchbasis
                   </p>
 
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {inquiry.tags.map((tag) => (
+                    {tags.map((tag, tagIndex) => (
                       <span
-                        key={tag}
+                        key={`${normalizeKey(tag)}-${tagIndex}`}
                         className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
                       >
                         {tag}
