@@ -1,19 +1,28 @@
 "use client";
 
-import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { type FormEvent, useState } from "react";
+
+const searchSuggestions = [
+  "Restaurant Wattenwil",
+  "Events Wochenende",
+  "Bäckerei in der Nähe",
+  "Werkstatt Belp",
+  "Kies kaufen",
+  "Konzert Thun",
+];
 
 const userBenefits = [
   {
     title: "Natürlich suchen",
     description:
-      "Suche wie du sprichst: zum Beispiel „Ich brauche Kies“, „Werkstatt in Wattenwil“ oder „Nissan kaufen“.",
+      "Suche wie du sprichst: zum Beispiel „Ich brauche Kies“, „Werkstatt in Wattenwil“ oder „Events am Wochenende“.",
   },
   {
     title: "Regionale Anbieter finden",
     description:
-      "Locario zeigt dir passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
+      "Locario zeigt passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
   },
   {
     title: "Events entdecken",
@@ -42,21 +51,48 @@ const businessBenefits = [
 
 const eventBenefits = [
   {
-    title: "Event anfragen",
+    title: "Event einreichen",
     description:
       "Veranstalter können Events über Locario einreichen und ein passendes Wochenpaket auswählen.",
   },
   {
     title: "Admin prüft",
     description:
-      "Event-Anfragen werden im Admin geprüft und können direkt als öffentliches Event erstellt werden.",
+      "Event-Anfragen werden geprüft und können direkt als öffentliches Event erstellt werden.",
   },
   {
     title: "Regional sichtbar",
     description:
-      "Das Event erscheint auf der Events-Seite mit Datum, Ort, Beschreibung, Website und Ticketlink.",
+      "Das Event erscheint mit Datum, Ort, Beschreibung, Website und Ticketlink auf der Events-Seite.",
   },
 ];
+
+const platformStats = [
+  {
+    label: "Firmen",
+    value: "Regional",
+  },
+  {
+    label: "Events",
+    value: "Aktuell",
+  },
+  {
+    label: "Suche",
+    value: "Smart",
+  },
+];
+
+function normalizeKey(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -80,32 +116,28 @@ export default function HomePage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 text-white">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-[-12rem] top-[-12rem] h-[34rem] w-[34rem] rounded-full bg-cyan-400/20 blur-3xl" />
-        <div className="absolute right-[-14rem] top-[8rem] h-[36rem] w-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
-        <div className="absolute bottom-[10rem] left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
-      </div>
+      <BackgroundGlow />
 
-      <section className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl flex-col justify-center px-5 py-12 sm:px-6 md:py-20">
+      <section className="relative mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl flex-col justify-center px-4 py-12 sm:px-6 md:py-20">
         <div className="mx-auto max-w-4xl text-center">
           <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
             <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
             <span className="truncate">
-              Lokales Portal für Firmen und Events
+              Lokales Portal für Firmen, Suche und Events
             </span>
           </div>
 
           <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl md:text-7xl">
-            Entdecke, was in deiner{" "}
+            Finde, was in deiner{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              Region läuft.
+              Region wichtig ist.
             </span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg md:leading-8">
             Locario verbindet lokale Firmen, regionale Anbieter und Events an
-            einem Ort. Suche nach dem, was du brauchst, oder entdecke
-            Veranstaltungen in deiner Nähe.
+            einem Ort. Suche direkt nach dem, was du brauchst, oder entdecke
+            neue Angebote und Veranstaltungen in deiner Nähe.
           </p>
 
           <form
@@ -117,6 +149,7 @@ export default function HomePage() {
               onChange={(event) => setQuery(event.target.value)}
               className="w-full rounded-2xl bg-white px-4 py-4 text-base font-semibold text-slate-950 outline-none placeholder:text-slate-500 md:rounded-3xl md:px-5 md:text-lg"
               placeholder="Was suchst du? Zum Beispiel: Werkstatt Wattenwil"
+              aria-label="Suchbegriff"
             />
 
             <button
@@ -126,6 +159,19 @@ export default function HomePage() {
               Suchen
             </button>
           </form>
+
+          <div className="mx-auto mt-5 flex max-w-3xl flex-wrap justify-center gap-2">
+            {searchSuggestions.map((suggestion, suggestionIndex) => (
+              <button
+                key={`${normalizeKey(suggestion)}-${suggestionIndex}`}
+                type="button"
+                onClick={() => goToSearch(suggestion)}
+                className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-bold text-slate-200 transition hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-cyan-100"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="mx-auto mt-10 grid w-full max-w-6xl gap-6 lg:grid-cols-2">
@@ -151,28 +197,40 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="relative mx-auto max-w-7xl px-5 pb-20 sm:px-6">
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20 md:p-10">
-          <div className="max-w-3xl">
-            <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Für Nutzer
-            </p>
+      <section className="relative mx-auto max-w-7xl px-4 pb-20 sm:px-6">
+        <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20 md:p-10">
+          <div className="flex flex-col justify-between gap-8 lg:flex-row lg:items-end">
+            <div className="max-w-3xl">
+              <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+                Für Nutzer
+              </p>
 
-            <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-              Lokal suchen, schneller finden.
-            </h2>
+              <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
+                Lokal suchen, schneller finden.
+              </h2>
 
-            <p className="mt-5 text-slate-300">
-              Locario soll dir helfen, regionale Anbieter und Veranstaltungen
-              einfacher zu entdecken, ohne lange auf verschiedenen Seiten suchen
-              zu müssen.
-            </p>
+              <p className="mt-5 text-slate-300">
+                Locario hilft dir, regionale Anbieter und Veranstaltungen
+                einfacher zu entdecken, ohne lange auf verschiedenen Seiten
+                suchen zu müssen.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[24rem]">
+              {platformStats.map((stat, statIndex) => (
+                <StatCard
+                  key={`${normalizeKey(stat.label)}-${statIndex}`}
+                  label={stat.label}
+                  value={stat.value}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="mt-10 grid gap-6 md:grid-cols-3">
-            {userBenefits.map((benefit) => (
+            {userBenefits.map((benefit, benefitIndex) => (
               <InfoCard
-                key={benefit.title}
+                key={`${normalizeKey(benefit.title)}-${benefitIndex}`}
                 title={benefit.title}
                 description={benefit.description}
               />
@@ -181,7 +239,7 @@ export default function HomePage() {
         </section>
 
         <section className="mt-10 grid gap-8 lg:grid-cols-2">
-          <section className="rounded-[2rem] border border-cyan-300/20 bg-cyan-300/10 p-8 shadow-2xl shadow-cyan-950/20">
+          <section className="rounded-[2rem] border border-cyan-300/20 bg-cyan-300/10 p-6 shadow-2xl shadow-cyan-950/20 md:p-8">
             <p className="text-sm font-black uppercase tracking-wide text-cyan-200">
               Für Firmen
             </p>
@@ -197,9 +255,9 @@ export default function HomePage() {
             </p>
 
             <div className="mt-8 grid gap-4">
-              {businessBenefits.map((benefit) => (
+              {businessBenefits.map((benefit, benefitIndex) => (
                 <BusinessCard
-                  key={benefit.title}
+                  key={`${normalizeKey(benefit.title)}-${benefitIndex}`}
                   title={benefit.title}
                   description={benefit.description}
                 />
@@ -214,7 +272,7 @@ export default function HomePage() {
             </Link>
           </section>
 
-          <section className="rounded-[2rem] border border-amber-300/20 bg-amber-300/10 p-8 shadow-2xl shadow-amber-950/20">
+          <section className="rounded-[2rem] border border-amber-300/20 bg-amber-300/10 p-6 shadow-2xl shadow-amber-950/20 md:p-8">
             <p className="text-sm font-black uppercase tracking-wide text-amber-200">
               Für Veranstalter
             </p>
@@ -224,15 +282,14 @@ export default function HomePage() {
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Veranstalter können Events einreichen. Im Admin können diese
-              geprüft, angenommen und direkt als öffentliches Event erstellt
-              werden.
+              Veranstalter können Events einreichen. Im Admin werden sie
+              geprüft, angenommen und als öffentliches Event erstellt.
             </p>
 
             <div className="mt-8 grid gap-4">
-              {eventBenefits.map((benefit) => (
+              {eventBenefits.map((benefit, benefitIndex) => (
                 <BusinessCard
-                  key={benefit.title}
+                  key={`${normalizeKey(benefit.title)}-${benefitIndex}`}
                   title={benefit.title}
                   description={benefit.description}
                   amber
@@ -244,12 +301,12 @@ export default function HomePage() {
               href="/fuer-firmen"
               className="mt-8 inline-flex rounded-3xl bg-gradient-to-r from-amber-300 to-orange-400 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-amber-500/20 transition hover:-translate-y-0.5"
             >
-              Event bewerben
+              Event einreichen
             </Link>
           </section>
         </section>
 
-        <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 text-center shadow-2xl shadow-slate-950/20 md:p-12">
+        <section className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 text-center shadow-2xl shadow-slate-950/20 md:p-12">
           <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
             Locario
           </p>
@@ -283,6 +340,16 @@ export default function HomePage() {
         </section>
       </section>
     </main>
+  );
+}
+
+function BackgroundGlow() {
+  return (
+    <div className="pointer-events-none absolute inset-0">
+      <div className="absolute left-[-12rem] top-[-12rem] h-[34rem] w-[34rem] rounded-full bg-cyan-400/20 blur-3xl" />
+      <div className="absolute right-[-14rem] top-[8rem] h-[36rem] w-[36rem] rounded-full bg-blue-600/20 blur-3xl" />
+      <div className="absolute bottom-[10rem] left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
+    </div>
   );
 }
 
@@ -324,7 +391,7 @@ function PortalCard({
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_10%,rgba(255,255,255,0.16),transparent_18rem)]" />
       </div>
 
-      <div className="relative">
+      <div className="relative flex h-full flex-col">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p
@@ -358,7 +425,7 @@ function PortalCard({
         </div>
 
         <div
-          className={`mt-7 inline-flex rounded-2xl px-5 py-3 text-sm font-black text-slate-950 transition ${
+          className={`mt-7 inline-flex w-fit rounded-2xl px-5 py-3 text-sm font-black text-slate-950 transition ${
             isEvents
               ? "bg-white group-hover:bg-amber-300"
               : "bg-white group-hover:bg-cyan-300"
@@ -368,6 +435,18 @@ function PortalCard({
         </div>
       </div>
     </Link>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-left">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-2xl font-black text-cyan-100">{value}</p>
+    </article>
   );
 }
 
@@ -410,4 +489,3 @@ function BusinessCard({
     </article>
   );
 }
-

@@ -10,25 +10,43 @@ const systemAreas = [
   {
     title: "Firmenpakete",
     status: "Code",
-    description: "Starter, Pro, Premium und Paketlogik kommen aktuell aus src/data/plans.ts.",
+    description:
+      "Starter, Pro, Premium und Paketlogik kommen aktuell aus src/data/plans.ts.",
     href: "/admin/firmen",
   },
   {
     title: "Eventpakete",
     status: "Code",
-    description: "Basic, Highlight und Premium kommen aktuell aus src/data/event-plans.ts.",
+    description:
+      "Basic, Highlight und Premium kommen aktuell aus src/data/event-plans.ts.",
     href: "/admin/events",
   },
   {
     title: "Kategorien",
     status: "Code",
-    description: "Haupt- und Unterkategorien werden aktuell in src/data/categories.ts gepflegt.",
+    description:
+      "Haupt- und Unterkategorien werden aktuell in src/data/categories.ts gepflegt.",
     href: "/admin/suchanfragen",
+  },
+  {
+    title: "Suchbegriffe",
+    status: "Code",
+    description:
+      "Automatische Firmen- und Event-Suchbegriffe liegen in search-taxonomy.ts und event-search-taxonomy.ts.",
+    href: "/admin/suchanfragen",
+  },
+  {
+    title: "Firmen, Events und Leads",
+    status: "Datenbank",
+    description:
+      "Operative Inhalte werden über Adminseiten gepflegt und in der lokalen Datenbank gespeichert.",
+    href: "/admin",
   },
   {
     title: "Admin-Zugang",
     status: "MVP",
-    description: "Login und Logout sind vorhanden. Benutzerrollen kommen später.",
+    description:
+      "Login und Logout sind vorhanden. Benutzerrollen und Rechteverwaltung kommen später.",
     href: "/admin",
   },
 ];
@@ -37,12 +55,14 @@ const quickLinks = [
   {
     href: "/admin/firmen",
     title: "Firmenverwaltung",
-    description: "Firmen, Pakete, Partner-Links, Bilder und Werbung bearbeiten.",
+    description:
+      "Firmen, Pakete, Partner-Links, Bilder, Adresse und Werbung bearbeiten.",
   },
   {
     href: "/admin/events",
     title: "Eventverwaltung",
-    description: "Events, Sichtbarkeit, Wochenpakete und Eventbilder bearbeiten.",
+    description:
+      "Events, Sichtbarkeit, Wochenpakete, Eventbilder und Adressen bearbeiten.",
   },
   {
     href: "/admin/firmenanfragen",
@@ -81,8 +101,7 @@ const futureSettings = [
   },
   {
     title: "Regionen verwalten",
-    description:
-      "Orte, Nachbardörfer und Umkreislogik zentral steuern.",
+    description: "Orte, Nachbardörfer und Umkreislogik zentral steuern.",
     priority: "Wichtig",
   },
   {
@@ -98,29 +117,65 @@ const futureSettings = [
     priority: "Später",
   },
   {
-    title: "SEO-Einstellungen",
+    title: "Deployment-Migrationen",
     description:
-      "Seitentitel, Meta-Beschreibungen und Indexierung pro Bereich steuern.",
-    priority: "Später",
+      "Vor Livegang Datenbankschema sauber versionieren, ohne lokale Daten per Reset zu löschen.",
+    priority: "Wichtig",
   },
 ];
 
+function normalizeKey(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function uniqueValues(values: string[]) {
+  const seenValues = new Set<string>();
+  const uniqueItems: string[] = [];
+
+  values.forEach((value) => {
+    const cleanValue = value.trim();
+    const normalizedValue = normalizeKey(cleanValue);
+
+    if (!cleanValue || !normalizedValue || seenValues.has(normalizedValue)) {
+      return;
+    }
+
+    seenValues.add(normalizedValue);
+    uniqueItems.push(cleanValue);
+  });
+
+  return uniqueItems;
+}
+
+function getSafeSubCategories(category: string) {
+  return uniqueValues(getSubcategoriesForMainCategory(category));
+}
+
 export default function AdminSettingsPage() {
   const totalSubCategories = mainCategories.reduce((total, category) => {
-    return total + getSubcategoriesForMainCategory(category).length;
+    return total + getSafeSubCategories(category).length;
   }, 0);
 
   const largestCategories = [...mainCategories]
     .map((category) => {
       return {
         name: category,
-        subCategories: getSubcategoriesForMainCategory(category),
+        subCategories: getSafeSubCategories(category),
       };
     })
     .sort((firstCategory, secondCategory) => {
       return (
-        secondCategory.subCategories.length -
-        firstCategory.subCategories.length
+        secondCategory.subCategories.length - firstCategory.subCategories.length
       );
     });
 
@@ -141,9 +196,10 @@ export default function AdminSettingsPage() {
           </h1>
 
           <p className="mt-5 max-w-3xl text-slate-300">
-            Zentrale Übersicht über Locario-Konfiguration, Pakete, Kategorien
-            und zukünftige Admin-Einstellungen. Aktuell werden viele Werte noch
-            bewusst über Code-Dateien gesteuert.
+            Zentrale Übersicht über Locario-Konfiguration, Pakete, Kategorien,
+            Datenbankbereiche und spätere Admin-Einstellungen. Diese Seite ist
+            bewusst eine Orientierungshilfe, damit klar bleibt, was bereits im
+            Admin bearbeitet wird und was aktuell noch im Code gepflegt wird.
           </p>
         </div>
 
@@ -161,7 +217,7 @@ export default function AdminSettingsPage() {
         <CompactMetric label="Hauptkategorien" value={mainCategories.length} />
         <CompactMetric label="Unterkategorien" value={totalSubCategories} />
         <CompactMetric label="Status" value="MVP" variant="amber" />
-        <CompactMetric label="Admin" value="Aktiv" variant="emerald" />
+        <CompactMetric label="Build" value="Grün" variant="emerald" />
       </div>
 
       <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-slate-950/20">
@@ -170,12 +226,13 @@ export default function AdminSettingsPage() {
             Systemstatus
           </p>
 
-          <h2 className="mt-2 text-3xl font-black">Was aktuell wie gesteuert wird</h2>
+          <h2 className="mt-2 text-3xl font-black">
+            Was aktuell wie gesteuert wird
+          </h2>
 
           <p className="mt-2 max-w-3xl text-sm text-slate-400">
-            Diese Übersicht verhindert Verwirrung: Was bereits im Admin
-            bearbeitet wird, liegt in der Datenbank. Was hier als Code markiert
-            ist, wird aktuell noch über Projektdateien gepflegt.
+            Alles mit Status Datenbank wird operativ über Locario gepflegt. Alles
+            mit Status Code ist aktuell noch bewusst in Projektdateien fixiert.
           </p>
         </div>
 
@@ -318,7 +375,9 @@ export default function AdminSettingsPage() {
             Roadmap
           </p>
 
-          <h2 className="mt-2 text-3xl font-black">Spätere echte Einstellungen</h2>
+          <h2 className="mt-2 text-3xl font-black">
+            Spätere echte Einstellungen
+          </h2>
 
           <p className="mt-2 max-w-3xl text-sm text-slate-300">
             Diese Punkte sind sinnvoll, sobald Locario operativ läuft und du
@@ -365,7 +424,9 @@ function CompactMetric({
         {label}
       </p>
 
-      <p className={`mt-1 text-3xl font-black ${valueClassName}`}>{value}</p>
+      <p className={`mt-1 break-words text-3xl font-black ${valueClassName}`}>
+        {value}
+      </p>
     </div>
   );
 }
@@ -381,6 +442,13 @@ function SystemRow({
   description: string;
   href: string;
 }) {
+  const statusClassName =
+    status === "Datenbank"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : status === "MVP"
+        ? "border-amber-300/20 bg-amber-300/10 text-amber-100"
+        : "border-cyan-300/20 bg-cyan-300/10 text-cyan-100";
+
   return (
     <Link
       href={href}
@@ -388,11 +456,13 @@ function SystemRow({
     >
       <p className="font-black text-white">{title}</p>
 
-      <span className="w-fit rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
+      <span
+        className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${statusClassName}`}
+      >
         {status}
       </span>
 
-      <p className="text-sm text-slate-400">{description}</p>
+      <p className="text-sm leading-6 text-slate-400">{description}</p>
 
       <p className="text-sm font-black text-cyan-200 lg:text-right">
         Öffnen →
@@ -428,7 +498,9 @@ function PlanCard({
           </p>
         </div>
 
-        <span className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${className}`}>
+        <span
+          className={`w-fit rounded-full border px-3 py-1 text-xs font-black ${className}`}
+        >
           {value}
         </span>
       </div>
@@ -459,7 +531,7 @@ function QuickLink({
           </p>
         </div>
 
-        <span className="text-sm font-black text-cyan-300">→</span>
+        <span className="shrink-0 text-sm font-black text-cyan-300">→</span>
       </div>
     </Link>
   );
@@ -481,9 +553,9 @@ function CategoryRow({
       </span>
 
       <div className="flex flex-wrap gap-2">
-        {subCategories.slice(0, 10).map((subCategory) => (
+        {subCategories.slice(0, 10).map((subCategory, index) => (
           <span
-            key={subCategory}
+            key={`${normalizeKey(subCategory)}-${index}`}
             className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
           >
             {subCategory}
