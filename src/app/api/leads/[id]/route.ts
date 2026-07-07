@@ -7,6 +7,10 @@ type RouteContext = {
   }>;
 };
 
+type UpdateLeadRequestBody = {
+  status?: string;
+};
+
 const allowedStatuses = ["new", "in_progress", "done"];
 
 type LeadWithCompany = {
@@ -14,26 +18,9 @@ type LeadWithCompany = {
   companyId: string;
   company: {
     name: string;
+    city: string;
+    adress: string | null;
   };
-  customerName: string;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  message: string;import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-
-type RouteContext = {
-  params: Promise<{
-    id: string;
-  }>;
-};
-
-type UpdateLeadRequestBody = {
-  status?: string;
-};
-
-type LeadWithCompany = {
-  id: string;
-  companyId: string;
   customerName: string;
   customerEmail: string | null;
   customerPhone: string | null;
@@ -42,38 +29,15 @@ type LeadWithCompany = {
   status: string;
   createdAt: Date;
   updatedAt: Date;
-  company: {
-    name: string;
-    city: string;
-    adress: string | null;
-  };
 };
 
-const allowedStatuses = ["new", "in_progress", "done"];
-
-function getSafeString(value: unknown) {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  return "";
-}
-
 function mapLead(lead: LeadWithCompany) {
-  const companyAddress = lead.company.adress ?? "";
-
   return {
     id: lead.id,
     companyId: lead.companyId,
     companyName: lead.company.name,
     companyCity: lead.company.city,
-    companyAddress,
-    company: {
-      name: lead.company.name,
-      city: lead.company.city,
-      address: companyAddress,
-      adress: companyAddress,
-    },
+    companyAddress: lead.company.adress ?? "",
     customerName: lead.customerName,
     customerEmail: lead.customerEmail ?? "",
     customerPhone: lead.customerPhone ?? "",
@@ -86,10 +50,10 @@ function mapLead(lead: LeadWithCompany) {
 }
 
 export async function PUT(request: Request, context: RouteContext) {
-  const { id: rawId } = await context.params;
-  const id = getSafeString(rawId);
+  const { id } = await context.params;
+  const leadId = id?.trim();
 
-  if (!id) {
+  if (!leadId) {
     return NextResponse.json(
       {
         message: "Keine Lead-ID übergeben.",
@@ -104,7 +68,7 @@ export async function PUT(request: Request, context: RouteContext) {
     | UpdateLeadRequestBody
     | null;
 
-  const status = getSafeString(body?.status);
+  const status = body?.status?.trim() || "";
 
   if (!status || !allowedStatuses.includes(status)) {
     return NextResponse.json(
@@ -119,10 +83,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const existingLead = await prisma.lead.findUnique({
     where: {
-      id,
-    },
-    select: {
-      id: true,
+      id: leadId,
     },
   });
 
@@ -139,7 +100,7 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const updatedLead = await prisma.lead.update({
     where: {
-      id,
+      id: leadId,
     },
     data: {
       status,
@@ -152,89 +113,6 @@ export async function PUT(request: Request, context: RouteContext) {
           adress: true,
         },
       },
-    },
-  });
-
-  return NextResponse.json(mapLead(updatedLead));
-}
-
-  sourceQuery: string | null;
-  status: string;
-  createdAt: Date;
-};
-
-function mapLead(lead: LeadWithCompany) {
-  return {
-    id: lead.id,
-    companyId: lead.companyId,
-    companyName: lead.company.name,
-    customerName: lead.customerName,
-    customerEmail: lead.customerEmail ?? "",
-    customerPhone: lead.customerPhone ?? "",
-    message: lead.message,
-    sourceQuery: lead.sourceQuery ?? "",
-    status: lead.status,
-    createdAt: lead.createdAt.toISOString(),
-  };
-}
-
-export async function PUT(request: Request, context: RouteContext) {
-  const { id } = await context.params;
-
-  if (!id) {
-    return NextResponse.json(
-      {
-        message: "Keine Lead-ID übergeben.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  const body = (await request.json().catch(() => null)) as {
-    status?: string;
-  } | null;
-
-  const status = body?.status;
-
-  if (!status || !allowedStatuses.includes(status)) {
-    return NextResponse.json(
-      {
-        message: "Ungültiger Lead-Status.",
-      },
-      {
-        status: 400,
-      }
-    );
-  }
-
-  const existingLead = await prisma.lead.findUnique({
-    where: {
-      id,
-    },
-  });
-
-  if (!existingLead) {
-    return NextResponse.json(
-      {
-        message: "Lead wurde nicht gefunden.",
-      },
-      {
-        status: 404,
-      }
-    );
-  }
-
-  const updatedLead = await prisma.lead.update({
-    where: {
-      id,
-    },
-    data: {
-      status,
-    },
-    include: {
-      company: true,
     },
   });
 

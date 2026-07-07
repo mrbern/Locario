@@ -1,13 +1,42 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+const navigationLinks = [
+  {
+    href: "/suche",
+    label: "Suche",
+  },
+  {
+    href: "/firmen",
+    label: "Firmen",
+  },
+  {
+    href: "/events",
+    label: "Events",
+  },
+  {
+    href: "/fuer-firmen",
+    label: "Für Firmen & Veranstalter",
+  },
+];
+
 export default function Header() {
+  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   function closeMenu() {
     setIsMenuOpen(false);
+  }
+
+  function isActiveLink(href: string) {
+    if (href === "/") {
+      return pathname === "/";
+    }
+
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (
@@ -17,9 +46,10 @@ export default function Header() {
           href="/"
           onClick={closeMenu}
           className="group flex items-center gap-3"
+          aria-label="Zur Locario Startseite"
         >
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 to-blue-500 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition group-hover:scale-105">
-            N
+            L
           </div>
 
           <div>
@@ -30,34 +60,28 @@ export default function Header() {
           </div>
         </Link>
 
-        <nav className="hidden items-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-sm font-semibold text-slate-300 shadow-xl shadow-slate-950/20 md:flex">
-          <Link
-            href="/suche"
-            className="rounded-xl px-4 py-2 transition hover:bg-white/10 hover:text-white"
-          >
-            Suche
-          </Link>
+        <nav
+          className="hidden items-center rounded-2xl border border-white/10 bg-white/[0.04] px-2 py-2 text-sm font-semibold text-slate-300 shadow-xl shadow-slate-950/20 md:flex"
+          aria-label="Hauptnavigation"
+        >
+          {navigationLinks.map((link) => {
+            const isActive = isActiveLink(link.href);
 
-          <Link
-            href="/firmen"
-            className="rounded-xl px-4 py-2 transition hover:bg-white/10 hover:text-white"
-          >
-            Firmen
-          </Link>
-
-          <Link
-            href="/events"
-            className="rounded-xl px-4 py-2 transition hover:bg-white/10 hover:text-white"
-          >
-            Events
-          </Link>
-
-          <Link
-            href="/fuer-firmen"
-            className="rounded-xl px-4 py-2 transition hover:bg-white/10 hover:text-white"
-          >
-            Für Firmen
-          </Link>
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-current={isActive ? "page" : undefined}
+                className={`rounded-xl px-4 py-2 transition ${
+                  isActive
+                    ? "bg-cyan-300/15 text-cyan-100"
+                    : "hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="flex items-center gap-3">
@@ -66,7 +90,7 @@ export default function Header() {
             onClick={closeMenu}
             className="hidden rounded-2xl bg-gradient-to-br from-cyan-300 to-cyan-500 px-5 py-3 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 sm:inline-flex"
           >
-            Firma eintragen
+            Firma / Event eintragen
           </Link>
 
           <button
@@ -75,6 +99,7 @@ export default function Header() {
             className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-white transition hover:border-cyan-300/30 hover:bg-white/10 md:hidden"
             aria-label={isMenuOpen ? "Menü schliessen" : "Menü öffnen"}
             aria-expanded={isMenuOpen}
+            aria-controls="mobile-navigation"
           >
             <span className="grid gap-1.5">
               <span
@@ -98,26 +123,27 @@ export default function Header() {
       </div>
 
       {isMenuOpen && (
-        <div className="border-t border-white/10 bg-slate-950/95 px-5 py-4 shadow-2xl shadow-slate-950/40 backdrop-blur-2xl md:hidden">
-          <nav className="mx-auto grid max-w-7xl gap-3">
-            <MobileNavLink href="/suche" label="Suche" onClick={closeMenu} />
-
-            <MobileNavLink href="/firmen" label="Firmen" onClick={closeMenu} />
-
-            <MobileNavLink href="/events" label="Events" onClick={closeMenu} />
-
-            <MobileNavLink
-              href="/fuer-firmen"
-              label="fuer-firmen & Veranstalter"
-              onClick={closeMenu}
-            />
+        <div
+          id="mobile-navigation"
+          className="border-t border-white/10 bg-slate-950/95 px-5 py-4 shadow-2xl shadow-slate-950/40 backdrop-blur-2xl md:hidden"
+        >
+          <nav className="mx-auto grid max-w-7xl gap-3" aria-label="Mobile Navigation">
+            {navigationLinks.map((link) => (
+              <MobileNavLink
+                key={link.href}
+                href={link.href}
+                label={link.label}
+                isActive={isActiveLink(link.href)}
+                onClick={closeMenu}
+              />
+            ))}
 
             <Link
               href="/fuer-firmen"
               onClick={closeMenu}
               className="mt-2 rounded-2xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-5 py-4 text-center text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/20"
             >
-              Firma eintragen
+              Firma oder Event eintragen
             </Link>
           </nav>
         </div>
@@ -129,20 +155,26 @@ export default function Header() {
 function MobileNavLink({
   href,
   label,
+  isActive,
   onClick,
 }: {
   href: string;
   label: string;
+  isActive: boolean;
   onClick: () => void;
 }) {
   return (
     <Link
       href={href}
       onClick={onClick}
-      className="rounded-2xl border border-white/10 bg-white/[0.05] px-5 py-4 text-sm font-black text-slate-200 transition hover:border-cyan-300/30 hover:bg-white/10 hover:text-white"
+      aria-current={isActive ? "page" : undefined}
+      className={`rounded-2xl border px-5 py-4 text-sm font-black transition ${
+        isActive
+          ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100"
+          : "border-white/10 bg-white/[0.05] text-slate-200 hover:border-cyan-300/30 hover:bg-white/10 hover:text-white"
+      }`}
     >
       {label}
     </Link>
   );
 }
-
