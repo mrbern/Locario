@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { canCompanyReceiveLeads } from "@/data/plans";
+import { prisma } from "@/lib/prisma";
 
 type LeadRequestBody = {
   companyId?: string;
@@ -11,7 +11,7 @@ type LeadRequestBody = {
   sourceQuery?: string;
 };
 
-function mapLead(lead: {
+type LeadWithCompany = {
   id: string;
   companyId: string;
   customerName: string;
@@ -24,12 +24,34 @@ function mapLead(lead: {
   updatedAt: Date;
   company: {
     name: string;
+    city: string;
+    adress: string | null;
   };
-}) {
+};
+
+function getSafeString(value: unknown) {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  return "";
+}
+
+function mapLead(lead: LeadWithCompany) {
+  const companyAddress = lead.company.adress ?? "";
+
   return {
     id: lead.id,
     companyId: lead.companyId,
     companyName: lead.company.name,
+    companyCity: lead.company.city,
+    companyAddress,
+    company: {
+      name: lead.company.name,
+      city: lead.company.city,
+      address: companyAddress,
+      adress: companyAddress,
+    },
     customerName: lead.customerName,
     customerEmail: lead.customerEmail ?? "",
     customerPhone: lead.customerPhone ?? "",
@@ -47,6 +69,8 @@ export async function GET() {
       company: {
         select: {
           name: true,
+          city: true,
+          adress: true,
         },
       },
     },
@@ -60,9 +84,29 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as LeadRequestBody;
+  const body = (await request.json().catch(() => null)) as
+    | LeadRequestBody
+    | null;
 
-  if (!body.companyId) {
+  if (!body) {
+    return NextResponse.json(
+      {
+        message: "Ungültige Anfrage.",
+      },
+      {
+        status: 400,
+      }
+    );
+  }
+
+  const companyId = getSafeString(body.companyId);
+  const customerName = getSafeString(body.customerName);
+  const customerEmail = getSafeString(body.customerEmail);
+  const customerPhone = getSafeString(body.customerPhone);
+  const message = getSafeString(body.message);
+  const sourceQuery = getSafeString(body.sourceQuery);
+
+  if (!companyId) {
     return NextResponse.json(
       {
         message: "Firma ist erforderlich.",
@@ -73,7 +117,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.customerName || !body.customerName.trim()) {
+  if (!customerName) {
     return NextResponse.json(
       {
         message: "Name ist erforderlich.",
@@ -84,7 +128,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.customerEmail?.trim() && !body.customerPhone?.trim()) {
+  if (!customerEmail && !customerPhone) {
     return NextResponse.json(
       {
         message: "Bitte E-Mail oder Telefonnummer angeben.",
@@ -95,7 +139,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!body.message || !body.message.trim()) {
+  if (!message) {
     return NextResponse.json(
       {
         message: "Nachricht ist erforderlich.",
@@ -108,7 +152,7 @@ export async function POST(request: Request) {
 
   const company = await prisma.company.findUnique({
     where: {
-      id: body.companyId,
+      id: companyId,
     },
     select: {
       id: true,
@@ -141,18 +185,20 @@ export async function POST(request: Request) {
 
   const lead = await prisma.lead.create({
     data: {
-      companyId: body.companyId,
-      customerName: body.customerName.trim(),
-      customerEmail: body.customerEmail?.trim() || null,
-      customerPhone: body.customerPhone?.trim() || null,
-      message: body.message.trim(),
-      sourceQuery: body.sourceQuery?.trim() || null,
+      companyId,
+      customerName,
+      customerEmail: customerEmail || null,
+      customerPhone: customerPhone || null,
+      message,
+      sourceQuery: sourceQuery || null,
       status: "new",
     },
     include: {
       company: {
         select: {
           name: true,
+          city: true,
+          adress: true,
         },
       },
     },
@@ -162,4 +208,3 @@ export async function POST(request: Request) {
     status: 201,
   });
 }
-
