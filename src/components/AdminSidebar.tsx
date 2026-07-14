@@ -35,6 +35,11 @@ const adminLinkGroups: AdminLinkGroup[] = [
         description: "Tabelle",
       },
       {
+        href: "/admin/standorte",
+        label: "Standorte",
+        description: "Filialen",
+      },
+      {
         href: "/admin/events",
         label: "Events",
         description: "Tabelle",

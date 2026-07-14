@@ -113,6 +113,21 @@ function getCompanyName(company: Company) {
   );
 }
 
+function getCompanyLocationName(company: Company) {
+  return getSafeString(company.locationName).trim();
+}
+
+function getCompanyPublicTitle(company: Company) {
+  const companyName = getCompanyName(company);
+  const locationName = getCompanyLocationName(company);
+
+  if (locationName) {
+    return `${companyName} · ${locationName}`;
+  }
+
+  return companyName;
+}
+
 function getCompanyId(company: Company, fallbackIndex: number) {
   const safeId = String(company.id ?? "").trim();
 
@@ -190,6 +205,24 @@ function shouldShowAdvertising(company: Company) {
   return Boolean(company.ad) && canCompanyUseAdvertising(company.plan);
 }
 
+function getRelationBadgeLabel(company: Company) {
+  if (company.parentCompanyId && company.parentCompany?.name) {
+    return `Standort von ${company.parentCompany.name}`;
+  }
+
+  if (company.parentCompanyId) {
+    return "Standort";
+  }
+
+  if (company.locations && company.locations.length > 0) {
+    return `${company.locations.length} Standort${
+      company.locations.length === 1 ? "" : "e"
+    }`;
+  }
+
+  return "";
+}
+
 function getCompanySearchText(company: Company) {
   const safeCompany = company as SafeCompany;
   const mainCategory = getDisplayedMainCategory(company);
@@ -201,11 +234,27 @@ function getCompanySearchText(company: Company) {
   return normalizeText(
     [
       getCompanyName(company),
+      getCompanyPublicTitle(company),
+      company.locationName,
+      company.parentCompanyId,
+      company.parentCompany?.name,
+      company.parentCompany?.locationName,
+      company.parentCompany?.city,
+      company.parentCompany?.address,
+      company.parentCompany?.adress,
+      ...(company.locations ?? []).flatMap((location) => [
+        location.name,
+        location.locationName,
+        location.city,
+        location.address,
+        location.adress,
+      ]),
       mainCategory,
       ...subCategories,
       company.category,
       company.city,
       getCompanyAddress(company),
+      getCompanyLocationLine(company),
       company.description,
       company.phone,
       company.email,
@@ -335,9 +384,16 @@ export default function CompaniesPage() {
 
         const matchesCity =
           !normalizedCityQuery ||
-          normalizeText([company.city, getCompanyAddress(company)].join(" ")).includes(
-            normalizedCityQuery
-          );
+          normalizeText(
+            [
+              company.city,
+              getCompanyAddress(company),
+              getCompanyLocationLine(company),
+              company.locationName,
+              company.parentCompany?.name,
+              company.parentCompany?.city,
+            ].join(" ")
+          ).includes(normalizedCityQuery);
 
         return (
           matchesSearch &&
@@ -353,7 +409,7 @@ export default function CompaniesPage() {
           return planDifference;
         }
 
-        return getCompanyName(a).localeCompare(getCompanyName(b));
+        return getCompanyPublicTitle(a).localeCompare(getCompanyPublicTitle(b));
       });
   }, [
     allCompanies,
@@ -388,6 +444,10 @@ export default function CompaniesPage() {
 
   const premiumCompanies = filteredCompanies.filter(
     (company) => company.plan === "premium"
+  );
+
+  const locationCompanies = filteredCompanies.filter(
+    (company) => company.parentCompanyId
   );
 
   return (
@@ -437,8 +497,13 @@ export default function CompaniesPage() {
           </div>
 
           <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/30 backdrop-blur-xl">
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-4">
               <HeroStat value={allCompanies.length.toString()} label="Firmen" />
+
+              <HeroStat
+                value={locationCompanies.length.toString()}
+                label="Standorte"
+              />
 
               <HeroStat
                 value={companiesWithAds.length.toString()}
@@ -457,8 +522,9 @@ export default function CompaniesPage() {
               </p>
 
               <p className="mt-2 text-sm text-slate-300">
-                Firmen werden mit Kategorie, Ort, Adresse, Suchbegriffen,
-                Paket-Badge, Titelbild und optionaler Werbeanzeige dargestellt.
+                Firmen werden mit Kategorie, Ort, Adresse, Standortnamen,
+                Suchbegriffen, Paket-Badge, Titelbild und optionaler
+                Werbeanzeige dargestellt.
               </p>
             </div>
           </div>
@@ -476,8 +542,8 @@ export default function CompaniesPage() {
               </h2>
 
               <p className="mt-2 text-slate-400">
-                Suche nach Firma, Angebot, Leistung, Kategorie, Adresse oder
-                Ort.
+                Suche nach Firma, Standort, Angebot, Leistung, Kategorie,
+                Adresse oder Ort.
               </p>
             </div>
 
@@ -497,7 +563,7 @@ export default function CompaniesPage() {
               label="Suche"
               value={searchQuery}
               onChange={setSearchQuery}
-              placeholder="Name, Angebot, Leistung..."
+              placeholder="Name, Standort, Angebot..."
             />
 
             <SelectField
@@ -543,6 +609,7 @@ export default function CompaniesPage() {
 
             <div className="flex flex-wrap gap-3">
               <ResultPill label="Premium" value={premiumCompanies.length} />
+              <ResultPill label="Standorte" value={locationCompanies.length} />
               <ResultPill label="Mit Anzeige" value={companiesWithAds.length} />
               <ResultPill label="Mit Bild" value={companiesWithImages.length} />
             </div>
@@ -646,8 +713,10 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
   const hasImage = companyHasImage(company);
   const tags = uniqueTerms(getSafeStringArray((company as SafeCompany).tags));
   const companyName = getCompanyName(company);
+  const locationName = getCompanyLocationName(company);
   const companyId = getCompanyId(company, index);
   const locationLine = getCompanyLocationLine(company);
+  const relationBadgeLabel = getRelationBadgeLabel(company);
 
   return (
     <Link
@@ -658,7 +727,7 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
         {hasImage ? (
           <img
             src={company.imageUrl}
-            alt={companyName}
+            alt={getCompanyPublicTitle(company)}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (
@@ -678,6 +747,12 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
           <span className="rounded-full border border-white/10 bg-slate-950/60 px-3 py-1 text-sm font-bold text-slate-200 backdrop-blur">
             {company.city || "Ort offen"}
           </span>
+
+          {locationName && (
+            <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-3 py-1 text-sm font-bold text-blue-100 backdrop-blur">
+              {locationName}
+            </span>
+          )}
         </div>
 
         <div className="absolute left-5 top-5 rounded-2xl border border-white/15 bg-slate-950/50 px-4 py-2 text-sm font-bold text-white backdrop-blur">
@@ -716,6 +791,18 @@ function CompanyCard({ company, index }: { company: Company; index: number }) {
         <h2 className="mt-5 break-words text-2xl font-black tracking-tight">
           {companyName}
         </h2>
+
+        {locationName && (
+          <p className="mt-2 break-words text-sm font-black text-cyan-100">
+            {locationName}
+          </p>
+        )}
+
+        {relationBadgeLabel && (
+          <p className="mt-2 inline-flex w-fit rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100">
+            {relationBadgeLabel}
+          </p>
+        )}
 
         <p className="mt-3 break-words text-sm font-semibold text-slate-400">
           📍 {locationLine}

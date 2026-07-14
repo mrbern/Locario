@@ -8,6 +8,15 @@ export type CompanyAd = {
   updatedAt?: string;
 };
 
+export type CompanyLocationSummary = {
+  id: string;
+  name: string;
+  locationName?: string;
+  city: string;
+  address?: string;
+  adress?: string;
+};
+
 export type Company = {
   id: string;
   name: string;
@@ -17,6 +26,11 @@ export type Company = {
 
   accessToken?: string;
   plan?: string;
+
+  parentCompanyId?: string | null;
+  locationName?: string;
+  parentCompany?: CompanyLocationSummary | null;
+  locations?: CompanyLocationSummary[];
 
   mainCategory?: string;
   subCategory?: string;

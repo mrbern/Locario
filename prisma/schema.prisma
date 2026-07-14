@@ -16,6 +16,12 @@ model Company {
   accessToken String? @unique
   plan        String  @default("pilot")
 
+  parentCompanyId String?
+  locationName    String?
+
+  parentCompany Company?  @relation("CompanyLocations", fields: [parentCompanyId], references: [id], onDelete: SetNull)
+  locations     Company[] @relation("CompanyLocations")
+
   mainCategory  String @default("Allgemein")
   subCategory   String @default("Allgemein")
   subCategories String @default("[]")
@@ -38,6 +44,8 @@ model Company {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([parentCompanyId])
 }
 
 model Advertisement {

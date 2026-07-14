@@ -1,10 +1,10 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import {
   canCompanyUseAdvertising,
   canCompanyUsePartnerDashboard,
 } from "@/data/plans";
+import { prisma } from "@/lib/prisma";
 
 type RouteContext = {
   params: Promise<{
@@ -16,6 +16,9 @@ type CompanyRequestBody = {
   name?: string;
   imageUrl?: string;
   plan?: string;
+
+  parentCompanyId?: string | null;
+  locationName?: string | null;
 
   mainCategory?: string;
   subCategory?: string;
@@ -40,12 +43,26 @@ type CompanyRequestBody = {
   };
 };
 
-type CompanyWithAd = {
+type CompanySummaryFromDatabase = {
+  id: string;
+  name: string;
+  locationName: string | null;
+  city: string;
+  adress: string | null;
+};
+
+type CompanyWithRelations = {
   id: string;
   name: string;
   imageUrl: string | null;
   accessToken: string | null;
   plan: string;
+
+  parentCompanyId: string | null;
+  locationName: string | null;
+  parentCompany: CompanySummaryFromDatabase | null;
+  locations: CompanySummaryFromDatabase[];
+
   mainCategory: string;
   subCategory: string;
   subCategories: string;
@@ -69,7 +86,37 @@ type CompanyWithAd = {
   } | null;
 };
 
+type ParentCompanyChainRecord = {
+  parentCompanyId: string | null;
+};
+
 const allowedPlans = ["pilot", "starter", "pro", "premium"];
+
+const companySummarySelect = {
+  id: true,
+  name: true,
+  locationName: true,
+  city: true,
+  adress: true,
+};
+
+const companyInclude = {
+  ad: true,
+  parentCompany: {
+    select: companySummarySelect,
+  },
+  locations: {
+    select: companySummarySelect,
+    orderBy: [
+      {
+        city: "asc" as const,
+      },
+      {
+        name: "asc" as const,
+      },
+    ],
+  },
+};
 
 function createAccessToken() {
   return randomUUID().replace(/-/g, "");
@@ -92,13 +139,24 @@ function parseJsonArray(value: string | null | undefined): string[] {
     const parsed = JSON.parse(value);
 
     if (Array.isArray(parsed)) {
-      return parsed.filter((item) => typeof item === "string");
+      return parsed
+        .map((item) => String(item ?? "").trim())
+        .filter(Boolean);
     }
 
     return [];
   } catch {
-    return [];
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   }
+}
+
+function cleanNullableString(value: string | null | undefined) {
+  const cleanedValue = value?.trim() ?? "";
+
+  return cleanedValue || null;
 }
 
 function getRequestAddress(body: CompanyRequestBody, fallbackAddress = "") {
@@ -128,7 +186,92 @@ function getUpdatedCoordinate(
   return null;
 }
 
-async function syncAccessTokenForPlan(company: CompanyWithAd) {
+function mapCompanySummary(company: CompanySummaryFromDatabase | null) {
+  if (!company) {
+    return null;
+  }
+
+  return {
+    id: company.id,
+    name: company.name,
+    locationName: company.locationName ?? "",
+    city: company.city,
+    address: company.adress ?? "",
+    adress: company.adress ?? "",
+  };
+}
+
+async function parentWouldCreateCycle(
+  requestedParentCompanyId: string,
+  ownCompanyId: string
+) {
+  let currentParentCompanyId: string | null = requestedParentCompanyId;
+  const visitedCompanyIds = new Set<string>();
+
+  while (currentParentCompanyId) {
+    if (currentParentCompanyId === ownCompanyId) {
+      return true;
+    }
+
+    if (visitedCompanyIds.has(currentParentCompanyId)) {
+      return true;
+    }
+
+    visitedCompanyIds.add(currentParentCompanyId);
+
+    const parentRecord: ParentCompanyChainRecord | null =
+      await prisma.company.findUnique({
+        where: {
+          id: currentParentCompanyId,
+        },
+        select: {
+          parentCompanyId: true,
+        },
+      });
+
+    currentParentCompanyId = parentRecord?.parentCompanyId ?? null;
+  }
+
+  return false;
+}
+
+async function getValidParentCompanyId(
+  parentCompanyId: string | null,
+  ownCompanyId: string
+) {
+  if (!parentCompanyId) {
+    return null;
+  }
+
+  if (parentCompanyId === ownCompanyId) {
+    throw new Error("Eine Firma kann nicht ihr eigener Hauptstandort sein.");
+  }
+
+  const parentCompany = await prisma.company.findUnique({
+    where: {
+      id: parentCompanyId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!parentCompany) {
+    throw new Error("Die ausgewählte Hauptfirma wurde nicht gefunden.");
+  }
+
+  const createsCycle = await parentWouldCreateCycle(parentCompanyId, ownCompanyId);
+
+  if (createsCycle) {
+    throw new Error(
+      "Diese Standort-Verknüpfung ist nicht möglich, weil dadurch eine Schleife entstehen würde."
+    );
+  }
+
+  return parentCompany.id;
+}
+
+async function syncAccessTokenForPlan(company: CompanyWithRelations) {
   const shouldHavePartnerAccess = canCompanyUsePartnerDashboard(company.plan);
 
   if (shouldHavePartnerAccess && company.accessToken) {
@@ -143,9 +286,7 @@ async function syncAccessTokenForPlan(company: CompanyWithAd) {
       data: {
         accessToken: createAccessToken(),
       },
-      include: {
-        ad: true,
-      },
+      include: companyInclude,
     });
   }
 
@@ -157,16 +298,14 @@ async function syncAccessTokenForPlan(company: CompanyWithAd) {
       data: {
         accessToken: null,
       },
-      include: {
-        ad: true,
-      },
+      include: companyInclude,
     });
   }
 
   return company;
 }
 
-function mapCompany(company: CompanyWithAd) {
+function mapCompany(company: CompanyWithRelations) {
   const parsedSubCategories = parseJsonArray(company.subCategories);
   const shouldShowAccessToken = canCompanyUsePartnerDashboard(company.plan);
   const address = company.adress ?? "";
@@ -177,6 +316,12 @@ function mapCompany(company: CompanyWithAd) {
     imageUrl: company.imageUrl ?? "",
     accessToken: shouldShowAccessToken ? company.accessToken ?? "" : "",
     plan: company.plan,
+
+    parentCompanyId: company.parentCompanyId,
+    locationName: company.locationName ?? "",
+    parentCompany: mapCompanySummary(company.parentCompany),
+    locations: company.locations.map(mapCompanySummary).filter(Boolean),
+
     mainCategory: company.mainCategory,
     subCategory: company.subCategory,
     subCategories:
@@ -203,6 +348,8 @@ function mapCompany(company: CompanyWithAd) {
             cta: company.ad.cta,
           }
         : undefined,
+    createdAt: company.createdAt?.toISOString(),
+    updatedAt: company.updatedAt?.toISOString(),
   };
 }
 
@@ -224,9 +371,7 @@ export async function GET(_request: Request, context: RouteContext) {
     where: {
       id,
     },
-    include: {
-      ad: true,
-    },
+    include: companyInclude,
   });
 
   if (!company) {
@@ -280,6 +425,34 @@ export async function PUT(request: Request, context: RouteContext) {
 
   const plan = getValidPlan(body.plan, existingCompany.plan);
   const mainCategory = body.mainCategory?.trim() || "Allgemein";
+
+  const requestedParentCompanyId =
+    body.parentCompanyId !== undefined
+      ? cleanNullableString(body.parentCompanyId)
+      : existingCompany.parentCompanyId;
+
+  const locationName =
+    body.locationName !== undefined
+      ? cleanNullableString(body.locationName)
+      : existingCompany.locationName;
+
+  let parentCompanyId: string | null = null;
+
+  try {
+    parentCompanyId = await getValidParentCompanyId(requestedParentCompanyId, id);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Standort-Verknüpfung konnte nicht geprüft werden.",
+      },
+      {
+        status: 400,
+      }
+    );
+  }
 
   const selectedSubCategories = (body.subCategories ?? [])
     .map((subCategory) => subCategory.trim())
@@ -348,6 +521,10 @@ export async function PUT(request: Request, context: RouteContext) {
         ? existingCompany.accessToken || createAccessToken()
         : null,
       plan,
+
+      parentCompanyId,
+      locationName,
+
       mainCategory,
       subCategory: primarySubCategory,
       subCategories: JSON.stringify(subCategories),
@@ -394,9 +571,7 @@ export async function PUT(request: Request, context: RouteContext) {
     where: {
       id,
     },
-    include: {
-      ad: true,
-    },
+    include: companyInclude,
   });
 
   if (!updatedCompany) {

@@ -13,6 +13,9 @@ type CompanyRequestBody = {
 
   plan?: string;
 
+  parentCompanyId?: string | null;
+  locationName?: string | null;
+
   mainCategory?: string;
   subCategory?: string;
   subCategories?: string[];
@@ -40,6 +43,14 @@ type CompanyRequestBody = {
   };
 };
 
+type CompanySummaryFromDatabase = {
+  id: string;
+  name: string;
+  locationName: string | null;
+  city: string;
+  adress: string | null;
+};
+
 type CompanyFromDatabase = {
   id: string;
   name: string;
@@ -48,6 +59,11 @@ type CompanyFromDatabase = {
 
   accessToken: string | null;
   plan: string;
+
+  parentCompanyId: string | null;
+  locationName: string | null;
+  parentCompany: CompanySummaryFromDatabase | null;
+  locations: CompanySummaryFromDatabase[];
 
   mainCategory: string;
   subCategory: string;
@@ -81,6 +97,32 @@ type CompanyFromDatabase = {
 };
 
 const allowedPlans = ["pilot", "starter", "pro", "premium"];
+
+const companySummarySelect = {
+  id: true,
+  name: true,
+  locationName: true,
+  city: true,
+  adress: true,
+};
+
+const companyInclude = {
+  ad: true,
+  parentCompany: {
+    select: companySummarySelect,
+  },
+  locations: {
+    select: companySummarySelect,
+    orderBy: [
+      {
+        city: "asc" as const,
+      },
+      {
+        name: "asc" as const,
+      },
+    ],
+  },
+};
 
 function getValidPlan(plan: string | undefined) {
   if (plan && allowedPlans.includes(plan)) {
@@ -119,6 +161,23 @@ function cleanStringArray(values: string[] | undefined) {
     .filter(Boolean);
 }
 
+function cleanNullableString(value: string | null | undefined) {
+  const cleanedValue = value?.trim() ?? "";
+
+  return cleanedValue || null;
+}
+
+function mapCompanySummary(company: CompanySummaryFromDatabase) {
+  return {
+    id: company.id,
+    name: company.name,
+    locationName: company.locationName ?? "",
+    city: company.city,
+    address: company.adress ?? "",
+    adress: company.adress ?? "",
+  };
+}
+
 function mapCompany(company: CompanyFromDatabase) {
   return {
     id: company.id,
@@ -128,6 +187,13 @@ function mapCompany(company: CompanyFromDatabase) {
 
     accessToken: company.accessToken ?? "",
     plan: company.plan,
+
+    parentCompanyId: company.parentCompanyId,
+    locationName: company.locationName ?? "",
+    parentCompany: company.parentCompany
+      ? mapCompanySummary(company.parentCompany)
+      : null,
+    locations: company.locations.map(mapCompanySummary),
 
     mainCategory: company.mainCategory,
     subCategory: company.subCategory,
@@ -166,11 +232,30 @@ function mapCompany(company: CompanyFromDatabase) {
   };
 }
 
+async function getValidParentCompanyId(parentCompanyId: string | null) {
+  if (!parentCompanyId) {
+    return null;
+  }
+
+  const parentCompany = await prisma.company.findUnique({
+    where: {
+      id: parentCompanyId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!parentCompany) {
+    throw new Error("Die ausgewählte Hauptfirma wurde nicht gefunden.");
+  }
+
+  return parentCompany.id;
+}
+
 export async function GET() {
   const companies = await prisma.company.findMany({
-    include: {
-      ad: true,
-    },
+    include: companyInclude,
     orderBy: {
       createdAt: "desc",
     },
@@ -186,6 +271,27 @@ export async function POST(request: Request) {
   const imageUrl = body.imageUrl?.trim() || null;
 
   const plan = getValidPlan(body.plan);
+
+  const parentCompanyIdFromRequest = cleanNullableString(body.parentCompanyId);
+  const locationName = cleanNullableString(body.locationName);
+
+  let parentCompanyId: string | null = null;
+
+  try {
+    parentCompanyId = await getValidParentCompanyId(parentCompanyIdFromRequest);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message:
+          error instanceof Error
+            ? error.message
+            : "Die Hauptfirma konnte nicht geprüft werden.",
+      },
+      {
+        status: 400,
+      }
+    );
+  }
 
   const mainCategory = body.mainCategory?.trim() || "Allgemein";
 
@@ -262,6 +368,9 @@ export async function POST(request: Request) {
       accessToken: partnerDashboardAllowed ? randomUUID() : null,
       plan,
 
+      parentCompanyId,
+      locationName,
+
       mainCategory,
       subCategory: primarySubCategory,
       subCategories: JSON.stringify(subCategories),
@@ -291,9 +400,7 @@ export async function POST(request: Request) {
           }
         : undefined,
     },
-    include: {
-      ad: true,
-    },
+    include: companyInclude,
   });
 
   return NextResponse.json(mapCompany(company), {

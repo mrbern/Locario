@@ -18,12 +18,47 @@ type LeadForm = {
   message: string;
 };
 
+type RelatedCompany = {
+  id: string;
+  name: string;
+  locationName?: string | null;
+  city: string;
+  address?: string | null;
+  adress?: string | null;
+  parentCompanyId?: string | null;
+};
+
 const emptyLeadForm: LeadForm = {
   customerName: "",
   customerEmail: "",
   customerPhone: "",
   message: "",
 };
+
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function normalizeValue(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
 
 function getDisplayedSubCategories(company: Company) {
   if (company.subCategories && company.subCategories.length > 0) {
@@ -43,6 +78,59 @@ function getDisplayedSubCategories(company: Company) {
 
 function getDisplayedMainCategory(company: Company) {
   return company.mainCategory || "Allgemein";
+}
+
+function getCompanyAddress(company: RelatedCompany) {
+  return (
+    getSafeString(company.address).trim() ||
+    getSafeString(company.adress).trim()
+  );
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeValue(value);
+  const normalizedCity = normalizeValue(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getCompanyLocationLine(company: RelatedCompany) {
+  const city = getSafeString(company.city).trim();
+  const address = getCompanyAddress(company);
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
+function getCompanyDisplayName(company: RelatedCompany) {
+  const locationName = getSafeString(company.locationName).trim();
+
+  if (locationName) {
+    return `${company.name} · ${locationName}`;
+  }
+
+  return company.name;
+}
+
+function getExternalHref(value: string | null | undefined) {
+  const cleanValue = value?.trim();
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  if (cleanValue.startsWith("http://") || cleanValue.startsWith("https://")) {
+    return cleanValue;
+  }
+
+  return `https://${cleanValue}`;
 }
 
 function getPlanBadgeClassName(plan: string | undefined) {
@@ -88,6 +176,11 @@ export default function CompanyDetailPage({
 }) {
   const { id } = React.use(params);
   const [company, setCompany] = useState<Company | null>(null);
+  const [relatedParentCompany, setRelatedParentCompany] =
+    useState<RelatedCompany | null>(null);
+  const [relatedLocations, setRelatedLocations] = useState<RelatedCompany[]>(
+    []
+  );
   const [isDemoCompany, setIsDemoCompany] = useState(false);
   const [sourceQuery, setSourceQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -106,11 +199,66 @@ export default function CompanyDetailPage({
     loadCompany();
   }, [id]);
 
+  async function loadRelatedCompanies(loadedCompany: Company) {
+    try {
+      const response = await fetch("/api/companies", {
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const allCompanies = (await response.json()) as Company[];
+
+      if (loadedCompany.parentCompanyId) {
+        const parentCompany =
+          allCompanies.find(
+            (companyItem) => companyItem.id === loadedCompany.parentCompanyId
+          ) ??
+          loadedCompany.parentCompany ??
+          null;
+
+        const siblingLocations = allCompanies
+          .filter(
+            (companyItem) =>
+              companyItem.parentCompanyId === loadedCompany.parentCompanyId &&
+              companyItem.id !== loadedCompany.id
+          )
+          .sort((firstCompany, secondCompany) =>
+            getCompanyDisplayName(firstCompany).localeCompare(
+              getCompanyDisplayName(secondCompany)
+            )
+          );
+
+        setRelatedParentCompany(parentCompany);
+        setRelatedLocations(siblingLocations);
+        return;
+      }
+
+      const locations = allCompanies
+        .filter((companyItem) => companyItem.parentCompanyId === loadedCompany.id)
+        .sort((firstCompany, secondCompany) =>
+          getCompanyDisplayName(firstCompany).localeCompare(
+            getCompanyDisplayName(secondCompany)
+          )
+        );
+
+      setRelatedParentCompany(null);
+      setRelatedLocations(locations);
+    } catch {
+      setRelatedParentCompany(null);
+      setRelatedLocations([]);
+    }
+  }
+
   async function loadCompany() {
     try {
       setIsLoading(true);
       setErrorMessage("");
       setIsDemoCompany(false);
+      setRelatedParentCompany(null);
+      setRelatedLocations([]);
 
       const demoCompany = demoCompanies.find((item) => item.id === id);
 
@@ -134,8 +282,11 @@ export default function CompanyDetailPage({
 
       const data = (await response.json()) as Company;
       setCompany(data);
+      await loadRelatedCompanies(data);
     } catch (error) {
       setCompany(null);
+      setRelatedParentCompany(null);
+      setRelatedLocations([]);
 
       if (error instanceof Error) {
         setErrorMessage(error.message);
@@ -286,6 +437,14 @@ export default function CompanyDetailPage({
   const advertisingVisible = shouldShowAdvertising(company);
   const leadsVisible = shouldShowLeadForm(company);
   const hasImage = companyHasImage(company);
+  const locationName = getSafeString(company.locationName).trim();
+  const companyAddress = getCompanyAddress(company);
+  const websiteHref = getExternalHref(company.website);
+  const advertisingCtaHref =
+    websiteHref || (company.email ? `mailto:${company.email}` : "#kontakt");
+  const visibleTags = company.tags ?? [];
+  const hasRelatedCompanies =
+    Boolean(relatedParentCompany) || relatedLocations.length > 0;
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
@@ -333,6 +492,18 @@ export default function CompanyDetailPage({
                   {company.city}
                 </span>
 
+                {locationName && (
+                  <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm font-black text-blue-100 backdrop-blur">
+                    {locationName}
+                  </span>
+                )}
+
+                {relatedParentCompany && (
+                  <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-black text-emerald-100 backdrop-blur">
+                    Standort von {relatedParentCompany.name}
+                  </span>
+                )}
+
                 {shouldShowPlanBadge(company) && (
                   <span
                     className={`rounded-full border px-4 py-2 text-sm font-black backdrop-blur ${getPlanBadgeClassName(
@@ -347,6 +518,12 @@ export default function CompanyDetailPage({
               <h1 className="mt-6 max-w-5xl break-words text-4xl font-black tracking-tight sm:text-5xl md:text-7xl">
                 {company.name}
               </h1>
+
+              {locationName && (
+                <p className="mt-4 max-w-3xl text-xl font-black text-cyan-100 md:text-2xl">
+                  {locationName}
+                </p>
+              )}
 
               <p className="mt-6 max-w-3xl break-words text-base leading-7 text-slate-300 md:text-lg md:leading-8">
                 {company.description}
@@ -413,7 +590,7 @@ export default function CompanyDetailPage({
                   </a>
                 ) : (
                   <a
-                    href={company.website || `mailto:${company.email}`}
+                    href={advertisingCtaHref}
                     className="mt-7 inline-flex rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-6 py-4 font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
                   >
                     {company.ad.cta}
@@ -432,9 +609,9 @@ export default function CompanyDetailPage({
               </h2>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                {displayedSubCategories.map((subCategory) => (
+                {displayedSubCategories.map((subCategory, subCategoryIndex) => (
                   <span
-                    key={subCategory}
+                    key={`${normalizeValue(subCategory)}-${subCategoryIndex}`}
                     className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-sm font-semibold text-cyan-100"
                   >
                     {subCategory}
@@ -446,10 +623,10 @@ export default function CompanyDetailPage({
                 <h3 className="text-xl font-black">Suchbegriffe</h3>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {company.tags.length > 0 ? (
-                    company.tags.map((tag) => (
+                  {visibleTags.length > 0 ? (
+                    visibleTags.map((tag, tagIndex) => (
                       <span
-                        key={tag}
+                        key={`${normalizeValue(tag)}-${tagIndex}`}
                         className="rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-medium text-slate-300"
                       >
                         {tag}
@@ -463,6 +640,40 @@ export default function CompanyDetailPage({
                 </div>
               </div>
             </section>
+
+            {hasRelatedCompanies && (
+              <section className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20 md:p-8">
+                <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
+                  Standorte
+                </p>
+
+                <h2 className="mt-3 text-3xl font-black tracking-tight">
+                  Weitere Standorte
+                </h2>
+
+                <p className="mt-4 max-w-2xl text-slate-300">
+                  Diese Firma ist mit weiteren Standorten oder einer Hauptfirma
+                  auf Locario verbunden.
+                </p>
+
+                <div className="mt-6 grid gap-4">
+                  {relatedParentCompany && (
+                    <RelatedCompanyCard
+                      company={relatedParentCompany}
+                      badge="Hauptfirma"
+                    />
+                  )}
+
+                  {relatedLocations.map((location) => (
+                    <RelatedCompanyCard
+                      key={location.id}
+                      company={location}
+                      badge="Standort"
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
 
             {leadsVisible ? (
               <section
@@ -597,9 +808,9 @@ export default function CompanyDetailPage({
                     </a>
                   )}
 
-                  {company.website && (
+                  {websiteHref && (
                     <a
-                      href={company.website}
+                      href={websiteHref}
                       target="_blank"
                       rel="noreferrer"
                       className="rounded-3xl border border-white/15 px-6 py-4 text-center font-bold text-white transition hover:border-cyan-300/30 hover:bg-white/10"
@@ -613,7 +824,10 @@ export default function CompanyDetailPage({
           </div>
 
           <aside className="min-w-0 space-y-8">
-            <section className="w-full max-w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20 lg:sticky lg:top-28">
+            <section
+              id="kontakt"
+              className="w-full max-w-full overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-slate-950/20 lg:sticky lg:top-28"
+            >
               <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
                 Kontakt
               </p>
@@ -634,6 +848,10 @@ export default function CompanyDetailPage({
                 <InfoBox
                   title="Website"
                   value={company.website || "Nicht angegeben"}
+                />
+                <InfoBox
+                  title="Adresse"
+                  value={companyAddress || "Nicht angegeben"}
                 />
                 <InfoBox title="Ort" value={company.city} />
               </div>
@@ -657,9 +875,9 @@ export default function CompanyDetailPage({
                   </a>
                 )}
 
-                {company.website && (
+                {websiteHref && (
                   <a
-                    href={company.website}
+                    href={websiteHref}
                     target="_blank"
                     rel="noreferrer"
                     className="rounded-3xl border border-white/15 px-6 py-4 text-center font-bold text-white transition hover:border-cyan-300/30 hover:bg-white/10"
@@ -683,6 +901,37 @@ export default function CompanyDetailPage({
         </div>
       </section>
     </main>
+  );
+}
+
+function RelatedCompanyCard({
+  company,
+  badge,
+}: {
+  company: RelatedCompany;
+  badge: string;
+}) {
+  return (
+    <Link
+      href={`/firmen/${company.id}`}
+      className="group rounded-3xl border border-white/10 bg-slate-950/50 p-5 transition hover:border-cyan-300/30 hover:bg-white/[0.06]"
+    >
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+        <div className="min-w-0">
+          <p className="break-words text-lg font-black text-white group-hover:text-cyan-100">
+            {getCompanyDisplayName(company)}
+          </p>
+
+          <p className="mt-1 break-words text-sm text-slate-400">
+            {getCompanyLocationLine(company)}
+          </p>
+        </div>
+
+        <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
+          {badge}
+        </span>
+      </div>
+    </Link>
   );
 }
 
@@ -735,6 +984,3 @@ function InputField({
     </div>
   );
 }
-
-
-
