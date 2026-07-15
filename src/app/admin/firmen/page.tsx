@@ -246,6 +246,76 @@ function getCompanyLocationLine(company: Company) {
   return address || city || "Ort offen";
 }
 
+function getCompanyLocationName(company: Company) {
+  return getSafeString(company.locationName).trim();
+}
+
+function getCompanyDisplayName(company: Company) {
+  const locationName = getCompanyLocationName(company);
+
+  if (locationName) {
+    return `${company.name} · ${locationName}`;
+  }
+
+  return company.name;
+}
+
+function getLocationStatusLabel(company: Company) {
+  if (company.parentCompanyId && company.parentCompany?.name) {
+    return `Filiale von ${company.parentCompany.name}`;
+  }
+
+  if (company.parentCompanyId) {
+    return "Filiale / Standort";
+  }
+
+  if (company.locations && company.locations.length > 0) {
+    return `Hauptfirma · ${company.locations.length} Standort${
+      company.locations.length === 1 ? "" : "e"
+    }`;
+  }
+
+  if (company.locationName) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
+}
+
+function getLocationStatusFilterValue(company: Company) {
+  if (company.parentCompanyId) {
+    return "location-company";
+  }
+
+  if (company.locations && company.locations.length > 0) {
+    return "main-company";
+  }
+
+  if (company.locationName) {
+    return "named-single";
+  }
+
+  return "single-location";
+}
+
+function getLocationStatusClassName(company: Company) {
+  const status = getLocationStatusFilterValue(company);
+
+  if (status === "location-company") {
+    return "border-blue-300/30 bg-blue-300/10 text-blue-100";
+  }
+
+  if (status === "main-company") {
+    return "border-emerald-300/30 bg-emerald-300/10 text-emerald-100";
+  }
+
+  if (status === "named-single") {
+    return "border-cyan-300/30 bg-cyan-300/10 text-cyan-100";
+  }
+
+  return "border-slate-300/20 bg-slate-300/10 text-slate-300";
+}
+
 function getExternalHref(value: string | null | undefined) {
   const cleanValue = value?.trim();
 
@@ -263,6 +333,21 @@ function getExternalHref(value: string | null | undefined) {
 function getCompanySearchText(company: Company) {
   return [
     company.name,
+    getCompanyDisplayName(company),
+    company.locationName,
+    getLocationStatusLabel(company),
+    company.parentCompany?.name,
+    company.parentCompany?.locationName,
+    company.parentCompany?.city,
+    company.parentCompany?.address,
+    company.parentCompany?.adress,
+    ...(company.locations ?? []).flatMap((location) => [
+      location.name,
+      location.locationName,
+      location.city,
+      location.address,
+      location.adress,
+    ]),
     company.plan,
     company.city,
     getCompanyAddress(company),
@@ -310,6 +395,7 @@ export default function AdminCompaniesPage() {
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [selectedPlanFilter, setSelectedPlanFilter] = useState("");
   const [selectedVisibilityFilter, setSelectedVisibilityFilter] = useState("");
+  const [selectedLocationFilter, setSelectedLocationFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
   const [successMessage, setSuccessMessage] = useState("");
@@ -329,7 +415,12 @@ export default function AdminCompaniesPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [companySearchQuery, selectedPlanFilter, selectedVisibilityFilter]);
+  }, [
+    companySearchQuery,
+    selectedPlanFilter,
+    selectedVisibilityFilter,
+    selectedLocationFilter,
+  ]);
 
   const selectedCompany = useMemo(() => {
     if (!selectedCompanyId) {
@@ -386,7 +477,11 @@ export default function AdminCompaniesPage() {
           (selectedVisibilityFilter === "without-dashboard" &&
             !canCompanyUsePartnerDashboard(company.plan));
 
-        return matchesSearch && matchesPlan && matchesVisibility;
+        const matchesLocation =
+          !selectedLocationFilter ||
+          getLocationStatusFilterValue(company) === selectedLocationFilter;
+
+        return matchesSearch && matchesPlan && matchesVisibility && matchesLocation;
       })
       .sort((firstCompany, secondCompany) =>
         getSafeString(firstCompany.name).localeCompare(
@@ -398,6 +493,7 @@ export default function AdminCompaniesPage() {
     companySearchQuery,
     selectedPlanFilter,
     selectedVisibilityFilter,
+    selectedLocationFilter,
   ]);
 
   const pageCount = Math.max(
@@ -412,8 +508,6 @@ export default function AdminCompaniesPage() {
     safeCurrentPage * companiesPerPage
   );
 
-  const companiesWithAds = companies.filter((company) => company.ad);
-  const companiesWithImages = companies.filter((company) => company.imageUrl);
   const starterCompanies = companies.filter(
     (company) => company.plan === "starter"
   );
@@ -421,12 +515,19 @@ export default function AdminCompaniesPage() {
   const premiumCompanies = companies.filter(
     (company) => company.plan === "premium"
   );
-  const dashboardCompanies = companies.filter((company) =>
-    canCompanyUsePartnerDashboard(company.plan)
+  const mainLocationCompanies = companies.filter(
+    (company) => !company.parentCompanyId && company.locations && company.locations.length > 0
+  );
+  const locationCompanies = companies.filter((company) => company.parentCompanyId);
+  const singleLocationCompanies = companies.filter(
+    (company) => !company.parentCompanyId && (!company.locations || company.locations.length === 0)
   );
 
   const hasActiveFilters =
-    companySearchQuery || selectedPlanFilter || selectedVisibilityFilter;
+    companySearchQuery ||
+    selectedPlanFilter ||
+    selectedVisibilityFilter ||
+    selectedLocationFilter;
 
   async function loadCompanies() {
     try {
@@ -522,6 +623,7 @@ export default function AdminCompaniesPage() {
     setCompanySearchQuery("");
     setSelectedPlanFilter("");
     setSelectedVisibilityFilter("");
+    setSelectedLocationFilter("");
     setCurrentPage(1);
   }
 
@@ -865,6 +967,13 @@ export default function AdminCompaniesPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/admin/standorte"
+            className="rounded-3xl border border-emerald-300/30 px-6 py-4 text-center text-sm font-black text-emerald-100 transition hover:bg-emerald-300/10"
+          >
+            Standorte verwalten
+          </Link>
+
           <button
             type="button"
             onClick={openCreateDrawer}
@@ -889,9 +998,9 @@ export default function AdminCompaniesPage() {
         <CompactMetric label="Starter" value={starterCompanies.length} />
         <CompactMetric label="Pro" value={proCompanies.length} />
         <CompactMetric label="Premium" value={premiumCompanies.length} />
-        <CompactMetric label="Dashboard" value={dashboardCompanies.length} />
-        <CompactMetric label="Werbung" value={companiesWithAds.length} />
-        <CompactMetric label="Bilder" value={companiesWithImages.length} />
+        <CompactMetric label="Hauptfirmen" value={mainLocationCompanies.length} />
+        <CompactMetric label="Filialen" value={locationCompanies.length} />
+        <CompactMetric label="Einzel" value={singleLocationCompanies.length} />
       </div>
 
       {successMessage && (
@@ -940,7 +1049,7 @@ export default function AdminCompaniesPage() {
             placeholder="Firma suchen: Name, Ort, Kategorie, Suchbegriff..."
           />
 
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_18rem]">
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-[16rem_18rem_18rem]">
             <PlanFilterSelect
               label="Paket"
               value={selectedPlanFilter}
@@ -951,6 +1060,12 @@ export default function AdminCompaniesPage() {
               label="Filter"
               value={selectedVisibilityFilter}
               onChange={setSelectedVisibilityFilter}
+            />
+
+            <LocationFilterSelect
+              label="Standortstatus"
+              value={selectedLocationFilter}
+              onChange={setSelectedLocationFilter}
             />
           </div>
         </div>
@@ -998,6 +1113,7 @@ export default function AdminCompaniesPage() {
                 <thead className="border-b border-white/10 bg-slate-950/80 text-xs font-black uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Firma</th>
+                    <th className="px-4 py-3">Standort</th>
                     <th className="px-4 py-3">Ort / Adresse</th>
                     <th className="px-4 py-3">Paket</th>
                     <th className="px-4 py-3">Features</th>
@@ -1033,7 +1149,7 @@ export default function AdminCompaniesPage() {
                             onClick={() => openDetailsDrawer(company)}
                             className="block max-w-full truncate text-left text-base font-black text-white transition hover:text-cyan-100"
                           >
-                            {company.name}
+                            {getCompanyDisplayName(company)}
                           </button>
 
                           <p className="mt-1 truncate text-xs text-slate-500">
@@ -1041,6 +1157,16 @@ export default function AdminCompaniesPage() {
                             {displayedSubCategories.slice(0, 3).join(", ") ||
                               "Keine Unterkategorie"}
                           </p>
+                        </td>
+
+                        <td className="max-w-[18rem] px-4 py-4">
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-black ${getLocationStatusClassName(
+                              company
+                            )}`}
+                          >
+                            {getLocationStatusLabel(company)}
+                          </span>
                         </td>
 
                         <td className="max-w-[22rem] px-4 py-4 text-slate-300">
@@ -1528,6 +1654,13 @@ function CompanyDetailsDrawer({
               Öffentlich öffnen
             </Link>
 
+            <Link
+              href="/admin/standorte"
+              className="rounded-2xl border border-emerald-300/30 px-4 py-3 text-center text-sm font-black text-emerald-100 transition hover:bg-emerald-300/10"
+            >
+              Standort verwalten
+            </Link>
+
             {websiteHref && (
               <a
                 href={websiteHref}
@@ -1566,15 +1699,31 @@ function CompanyDetailsDrawer({
           {company.ad && advertisingAllowed && (
             <MiniBadge label="Werbung" variant="emerald" />
           )}
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-black ${getLocationStatusClassName(
+              company
+            )}`}
+          >
+            {getLocationStatusLabel(company)}
+          </span>
         </div>
 
-        <h3 className="break-words text-4xl font-black">{company.name}</h3>
+        <h3 className="break-words text-4xl font-black">
+          {getCompanyDisplayName(company)}
+        </h3>
 
         <p className="text-slate-400">
           {companyLocationLine} · {displayedMainCategory}
         </p>
 
         <div className="grid gap-4 md:grid-cols-2">
+          <DetailBox title="Standortstatus" value={getLocationStatusLabel(company)} />
+
+          <DetailBox
+            title="Standortname"
+            value={getCompanyLocationName(company) || "Nicht hinterlegt"}
+          />
+
           <DetailBox title="Ort / Adresse" value={companyLocationLine} />
 
           <DetailBox title="Kategorie" value={displayedMainCategory} />
@@ -2201,6 +2350,63 @@ function VisibilityFilterSelect({
     </div>
   );
 }
+
+
+function LocationFilterSelect({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const options = [
+    {
+      value: "",
+      label: "Alle Standorttypen",
+    },
+    {
+      value: "main-company",
+      label: "Hauptfirmen mit Filialen",
+    },
+    {
+      value: "location-company",
+      label: "Filialen / Standorte",
+    },
+    {
+      value: "named-single",
+      label: "Hauptsitz / Einzelstandort",
+    },
+    {
+      value: "single-location",
+      label: "Einzelstandorte ohne Namen",
+    },
+  ];
+
+  return (
+    <div>
+      <label className="text-sm font-bold text-slate-200">{label}</label>
+
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-white outline-none focus:border-cyan-300"
+      >
+        {options.map((option) => (
+          <option
+            key={option.value}
+            value={option.value}
+            className="bg-slate-950 text-white"
+          >
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 
 function MultiSelectField({
   label,

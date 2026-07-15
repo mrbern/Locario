@@ -53,6 +53,10 @@ export type UnifiedSearchResult = {
   isHighlighted: boolean;
   meta: string;
   cta: string;
+  locationName?: string;
+  relationLabel?: string;
+  parentCompanyName?: string;
+  locationCount?: number;
   ad?: {
     title: string;
     description: string;
@@ -65,6 +69,24 @@ type SafeCompany = Company & {
   adress?: string | null;
   companyName?: string | null;
   title?: string | null;
+  parentCompanyId?: string | null;
+  locationName?: string | null;
+  parentCompany?: {
+    id?: string;
+    name?: string;
+    locationName?: string | null;
+    city?: string | null;
+    address?: string | null;
+    adress?: string | null;
+  } | null;
+  locations?: Array<{
+    id?: string;
+    name?: string;
+    locationName?: string | null;
+    city?: string | null;
+    address?: string | null;
+    adress?: string | null;
+  }>;
   tags?: unknown;
   searchTerms?: unknown;
   subCategories?: unknown;
@@ -711,6 +733,54 @@ function getCompanyName(company: Company) {
   );
 }
 
+function getCompanyLocationName(company: Company) {
+  return getSafeString((company as SafeCompany).locationName).trim();
+}
+
+function getCompanyPublicTitle(company: Company) {
+  const companyName = getCompanyName(company);
+  const locationName = getCompanyLocationName(company);
+
+  if (locationName) {
+    return `${companyName} · ${locationName}`;
+  }
+
+  return companyName;
+}
+
+function getCompanyLocationCount(company: Company) {
+  const safeCompany = company as SafeCompany;
+
+  return Array.isArray(safeCompany.locations) ? safeCompany.locations.length : 0;
+}
+
+function getCompanyRelationLabel(company: Company) {
+  const safeCompany = company as SafeCompany;
+  const parentName = getSafeString(safeCompany.parentCompany?.name).trim();
+  const locationCount = getCompanyLocationCount(company);
+  const locationName = getCompanyLocationName(company);
+
+  if (safeCompany.parentCompanyId && parentName) {
+    return `Standort von ${parentName}`;
+  }
+
+  if (safeCompany.parentCompanyId) {
+    return "Filiale / Standort";
+  }
+
+  if (locationCount > 0) {
+    return `Hauptfirma · ${locationCount} Standort${
+      locationCount === 1 ? "" : "e"
+    }`;
+  }
+
+  if (locationName) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "";
+}
+
 function getCompanyAddress(company: Company) {
   const safeCompany = company as SafeCompany;
 
@@ -886,8 +956,10 @@ function getQueryLocationFilter(
   });
 
   companies.forEach((company) => {
+    const safeCompany = company as SafeCompany;
     const normalizedCity = normalizeText(company.city);
     const normalizedAddress = normalizeText(getCompanyAddress(company));
+    const normalizedLocationName = normalizeText(safeCompany.locationName);
 
     if (normalizedCity) {
       knownLocations.add(normalizedCity);
@@ -896,6 +968,52 @@ function getQueryLocationFilter(
     if (normalizedAddress) {
       addLocationWordsFromAddress(knownLocations, normalizedAddress);
     }
+
+    if (normalizedLocationName) {
+      knownLocations.add(normalizedLocationName);
+    }
+
+    if (safeCompany.parentCompany) {
+      const normalizedParentCity = normalizeText(safeCompany.parentCompany.city);
+      const normalizedParentAddress = normalizeText(
+        safeCompany.parentCompany.address || safeCompany.parentCompany.adress
+      );
+      const normalizedParentLocationName = normalizeText(
+        safeCompany.parentCompany.locationName
+      );
+
+      if (normalizedParentCity) {
+        knownLocations.add(normalizedParentCity);
+      }
+
+      if (normalizedParentAddress) {
+        addLocationWordsFromAddress(knownLocations, normalizedParentAddress);
+      }
+
+      if (normalizedParentLocationName) {
+        knownLocations.add(normalizedParentLocationName);
+      }
+    }
+
+    (safeCompany.locations ?? []).forEach((location) => {
+      const normalizedLocationCity = normalizeText(location.city);
+      const normalizedLocationAddress = normalizeText(
+        location.address || location.adress
+      );
+      const normalizedChildLocationName = normalizeText(location.locationName);
+
+      if (normalizedLocationCity) {
+        knownLocations.add(normalizedLocationCity);
+      }
+
+      if (normalizedLocationAddress) {
+        addLocationWordsFromAddress(knownLocations, normalizedLocationAddress);
+      }
+
+      if (normalizedChildLocationName) {
+        knownLocations.add(normalizedChildLocationName);
+      }
+    });
   });
 
   events.forEach((event) => {
@@ -1095,12 +1213,82 @@ function compareDistances(aDistance: number | null, bDistance: number | null) {
 }
 
 function getCompanyTexts(company: Company): WeightedSearchText[] {
+  const safeCompany = company as SafeCompany;
   const advertisingAllowed = shouldShowAdvertising(company);
   const address = getCompanyAddress(company);
+  const locationName = getCompanyLocationName(company);
+  const publicTitle = getCompanyPublicTitle(company);
+  const relationLabel = getCompanyRelationLabel(company);
+  const parentCompany = safeCompany.parentCompany;
+  const childLocations = safeCompany.locations ?? [];
+
+  const parentTexts = parentCompany
+    ? [
+        {
+          value: parentCompany.name,
+          weight: 30,
+          label: "Hauptfirma",
+        },
+        {
+          value: parentCompany.locationName,
+          weight: 22,
+          label: "Hauptfirma Standort",
+        },
+        {
+          value: parentCompany.city,
+          weight: 12,
+          label: "Hauptfirma Ort",
+        },
+        {
+          value: parentCompany.address || parentCompany.adress,
+          weight: 12,
+          label: "Hauptfirma Adresse",
+        },
+      ]
+    : [];
+
+  const childLocationTexts = childLocations.flatMap((location) => [
+    {
+      value: location.name,
+      weight: 22,
+      label: "Weiterer Standort",
+    },
+    {
+      value: location.locationName,
+      weight: 28,
+      label: "Standortname",
+    },
+    {
+      value: location.city,
+      weight: 12,
+      label: "Standort Ort",
+    },
+    {
+      value: location.address || location.adress,
+      weight: 12,
+      label: "Standort Adresse",
+    },
+  ]);
 
   return [
     { value: "firma anbieter dienstleistung", weight: 12, label: "Typ" },
     { value: getCompanyName(company), weight: 32, label: "Name" },
+    { value: publicTitle, weight: 36, label: "Name / Standort" },
+    { value: locationName, weight: 34, label: "Standortname" },
+    {
+      value: relationLabel,
+      weight: 22,
+      label: "Standortbeziehung",
+    },
+    {
+      value: safeCompany.parentCompanyId
+        ? "standort filiale zweigstelle niederlassung"
+        : childLocations.length > 0
+          ? "hauptfirma hauptsitz hauptstandort standorte filialen"
+          : "einzelstandort firma",
+      weight: 24,
+      label: "Standorttyp",
+    },
     {
       value: getDisplayedMainCategory(company),
       weight: 38,
@@ -1115,6 +1303,8 @@ function getCompanyTexts(company: Company): WeightedSearchText[] {
     { value: company.city, weight: 12, label: "Ort" },
     { value: address, weight: 14, label: "Adresse" },
     { value: getCompanyLocationLine(company), weight: 14, label: "Adresse" },
+    ...parentTexts,
+    ...childLocationTexts,
     { value: company.description, weight: 16, label: "Beschreibung" },
     { value: company.phone, weight: 3, label: "Telefon" },
     { value: company.email, weight: 3, label: "E-Mail" },
@@ -1485,11 +1675,17 @@ function mapCompanyToResult({
   const displayedMainCategory = getDisplayedMainCategory(company);
   const advertisingAllowed = shouldShowAdvertising(company);
   const companyPlan = getSafeString(company.plan, "pilot") || "pilot";
+  const safeCompany = company as SafeCompany;
   const companyName = getCompanyName(company);
+  const companyLocationName = getCompanyLocationName(company);
   const companyCity = getSafeString(company.city);
   const companyAddress = getCompanyAddress(company);
   const companyLocationLine = getCompanyLocationLine(company);
   const companyDescription = getSafeString(company.description);
+  const relationLabel = getCompanyRelationLabel(company);
+  const parentCompanyName = getSafeString(safeCompany.parentCompany?.name);
+  const locationCount = getCompanyLocationCount(company);
+  const childLocations = safeCompany.locations ?? [];
   const planRank = getCompanyPlanRank(company);
 
   const score = calculateMatchScore({
@@ -1513,7 +1709,11 @@ function mapCompanyToResult({
     href: getCompanyHref(company, query),
     primaryBadge: getCompanyPlanLabel(companyPlan),
     planKey: companyPlan,
-    secondaryBadges: uniqueValues(displayedSubCategories).slice(0, 4),
+    secondaryBadges: uniqueValues([
+      ...displayedSubCategories,
+      companyLocationName,
+      relationLabel,
+    ]).slice(0, 4),
     tags: uniqueValues(getSafeStringArray((company as SafeCompany).tags)).slice(
       0,
       5
@@ -1525,7 +1725,24 @@ function mapCompanyToResult({
       userLocation,
     }),
     locationRank: getLocationRankFromTexts(
-      [companyCity, companyAddress, companyLocationLine],
+      [
+        companyCity,
+        companyAddress,
+        companyLocationName,
+        companyLocationLine,
+        safeCompany.parentCompany?.name,
+        safeCompany.parentCompany?.locationName,
+        safeCompany.parentCompany?.city,
+        safeCompany.parentCompany?.address,
+        safeCompany.parentCompany?.adress,
+        ...childLocations.flatMap((location) => [
+          location.name,
+          location.locationName,
+          location.city,
+          location.address,
+          location.adress,
+        ]),
+      ],
       companyCity,
       locationFilter
     ),
@@ -1533,6 +1750,10 @@ function mapCompanyToResult({
     isHighlighted: companyPlan === "premium" || companyPlan === "pro",
     meta: "Firma",
     cta: "Firma ansehen",
+    locationName: companyLocationName,
+    relationLabel,
+    parentCompanyName,
+    locationCount,
     ad:
       advertisingAllowed && company.ad
         ? {

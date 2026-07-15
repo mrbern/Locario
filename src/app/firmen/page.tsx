@@ -211,16 +211,20 @@ function getRelationBadgeLabel(company: Company) {
   }
 
   if (company.parentCompanyId) {
-    return "Standort";
+    return "Filiale / Standort";
   }
 
   if (company.locations && company.locations.length > 0) {
-    return `${company.locations.length} Standort${
+    return `Hauptfirma · ${company.locations.length} Standort${
       company.locations.length === 1 ? "" : "e"
     }`;
   }
 
-  return "";
+  if (getCompanyLocationName(company)) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
 }
 
 function getCompanySearchText(company: Company) {
@@ -392,6 +396,13 @@ export default function CompaniesPage() {
               company.locationName,
               company.parentCompany?.name,
               company.parentCompany?.city,
+              ...(company.locations ?? []).flatMap((location) => [
+                location.name,
+                location.locationName,
+                location.city,
+                location.address,
+                location.adress,
+              ]),
             ].join(" ")
           ).includes(normalizedCityQuery);
 
@@ -450,6 +461,10 @@ export default function CompaniesPage() {
     (company) => company.parentCompanyId
   );
 
+  const mainCompaniesWithLocations = filteredCompanies.filter(
+    (company) => !company.parentCompanyId && company.locations && company.locations.length > 0
+  );
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
       <div className="pointer-events-none absolute inset-0">
@@ -506,8 +521,8 @@ export default function CompaniesPage() {
               />
 
               <HeroStat
-                value={companiesWithAds.length.toString()}
-                label="Anzeigen"
+                value={mainCompaniesWithLocations.length.toString()}
+                label="Hauptfirmen"
               />
 
               <HeroStat
@@ -609,9 +624,12 @@ export default function CompaniesPage() {
 
             <div className="flex flex-wrap gap-3">
               <ResultPill label="Premium" value={premiumCompanies.length} />
-              <ResultPill label="Standorte" value={locationCompanies.length} />
+              <ResultPill label="Filialen" value={locationCompanies.length} />
+              <ResultPill
+                label="Hauptfirmen"
+                value={mainCompaniesWithLocations.length}
+              />
               <ResultPill label="Mit Anzeige" value={companiesWithAds.length} />
-              <ResultPill label="Mit Bild" value={companiesWithImages.length} />
             </div>
           </div>
         </section>

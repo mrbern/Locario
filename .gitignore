@@ -55,3 +55,5 @@ dev.db
 
 # uploaded files
 /public/uploads/
+.vercel
+.env*

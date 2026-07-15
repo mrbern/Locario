@@ -169,6 +169,38 @@ function companyHasImage(company: Company) {
   return Boolean(company.imageUrl && company.imageUrl.trim());
 }
 
+function getLocationRoleLabel({
+  company,
+  relatedParentCompany,
+  relatedLocations,
+}: {
+  company: Company;
+  relatedParentCompany: RelatedCompany | null;
+  relatedLocations: RelatedCompany[];
+}) {
+  const locationName = getSafeString(company.locationName).trim();
+
+  if (company.parentCompanyId && relatedParentCompany) {
+    return `Filiale von ${relatedParentCompany.name}`;
+  }
+
+  if (company.parentCompanyId) {
+    return "Filiale / Standort";
+  }
+
+  if (relatedLocations.length > 0) {
+    return `Hauptfirma mit ${relatedLocations.length} Standort${
+      relatedLocations.length === 1 ? "" : "en"
+    }`;
+  }
+
+  if (locationName) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
+}
+
 export default function CompanyDetailPage({
   params,
 }: {
@@ -445,6 +477,11 @@ export default function CompanyDetailPage({
   const visibleTags = company.tags ?? [];
   const hasRelatedCompanies =
     Boolean(relatedParentCompany) || relatedLocations.length > 0;
+  const locationRoleLabel = getLocationRoleLabel({
+    company,
+    relatedParentCompany,
+    relatedLocations,
+  });
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-10 text-white sm:px-6 md:py-16">
@@ -498,11 +535,9 @@ export default function CompanyDetailPage({
                   </span>
                 )}
 
-                {relatedParentCompany && (
-                  <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-black text-emerald-100 backdrop-blur">
-                    Standort von {relatedParentCompany.name}
-                  </span>
-                )}
+                <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-black text-emerald-100 backdrop-blur">
+                  {locationRoleLabel}
+                </span>
 
                 {shouldShowPlanBadge(company) && (
                   <span
@@ -648,12 +683,15 @@ export default function CompanyDetailPage({
                 </p>
 
                 <h2 className="mt-3 text-3xl font-black tracking-tight">
-                  Weitere Standorte
+                  {relatedParentCompany
+                    ? "Hauptfirma & weitere Standorte"
+                    : "Weitere Standorte dieser Firma"}
                 </h2>
 
                 <p className="mt-4 max-w-2xl text-slate-300">
-                  Diese Firma ist mit weiteren Standorten oder einer Hauptfirma
-                  auf Locario verbunden.
+                  {relatedParentCompany
+                    ? "Diese Filiale gehört zu einer Hauptfirma. Weitere verbundene Standorte werden ebenfalls angezeigt."
+                    : "Diese Hauptfirma hat weitere Standorte, Filialen oder Niederlassungen auf Locario."}
                 </p>
 
                 <div className="mt-6 grid gap-4">
@@ -848,6 +886,11 @@ export default function CompanyDetailPage({
                 <InfoBox
                   title="Website"
                   value={company.website || "Nicht angegeben"}
+                />
+                <InfoBox title="Standorttyp" value={locationRoleLabel} />
+                <InfoBox
+                  title="Standortname"
+                  value={locationName || "Nicht angegeben"}
                 />
                 <InfoBox
                   title="Adresse"

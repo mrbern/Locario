@@ -760,6 +760,12 @@ function UnifiedResultGrid({ results }: { results: UnifiedSearchResult[] }) {
                   <span className="line-clamp-1">{result.city || "Region"}</span>
                 </span>
 
+                {result.type === "company" && result.locationName && (
+                  <span className="rounded-full border border-blue-300/20 bg-blue-300/10 px-3 py-1 text-sm font-bold text-blue-100 backdrop-blur">
+                    {result.locationName}
+                  </span>
+                )}
+
                 {result.distanceKm !== null && (
                   <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-sm font-bold text-emerald-100 backdrop-blur">
                     ca. {result.distanceKm} km
@@ -801,6 +807,18 @@ function UnifiedResultGrid({ results }: { results: UnifiedSearchResult[] }) {
               <h2 className="mt-2 break-words text-2xl font-black tracking-tight">
                 {result.title}
               </h2>
+
+              {result.type === "company" && result.locationName && (
+                <p className="mt-2 break-words text-sm font-black text-cyan-100">
+                  {result.locationName}
+                </p>
+              )}
+
+              {result.type === "company" && result.relationLabel && (
+                <p className="mt-2 inline-flex w-fit rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-black text-emerald-100">
+                  {result.relationLabel}
+                </p>
+              )}
 
               <p className="mt-3 break-words text-sm font-semibold text-slate-400">
                 📍 {result.city || "Region"}
