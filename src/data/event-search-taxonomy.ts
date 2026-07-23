@@ -335,6 +335,8 @@ const eventSearchTaxonomy: EventSearchTaxonomyEntry[] = [
   },
 ];
 
+export const eventCategoryOptions = eventSearchTaxonomy.map((entry) => entry.label);
+
 function normalize(value: string) {
   return value
     .toLowerCase()

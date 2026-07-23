@@ -2,11 +2,15 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import {
+  categoryGroups,
   getSubcategoriesForMainCategory,
-  mainCategories,
+  type CategoryGroup,
 } from "@/data/categories";
 import { eventPlans } from "@/data/event-plans";
-import { getAutomaticEventSearchTerms } from "@/data/event-search-taxonomy";
+import {
+  eventCategoryOptions,
+  getAutomaticEventSearchTerms,
+} from "@/data/event-search-taxonomy";
 import { canCompanyUseAdvertising } from "@/data/plans";
 import { getAutomaticCompanySearchTerms } from "@/data/search-taxonomy";
 
@@ -141,24 +145,7 @@ const companyPackages = [
   },
 ];
 
-const eventCategories = [
-  "Konzert",
-  "Party",
-  "Markt",
-  "Sport",
-  "Verein",
-  "Gewerbe",
-  "Familie",
-  "Kultur",
-  "Gastronomie",
-  "Kurs",
-  "Gesundheit",
-  "Senioren",
-  "Jugend",
-  "Kirche",
-  "Dorf",
-  "Sonstiges",
-];
+const eventCategories = eventCategoryOptions;
 
 const benefits = [
   {
@@ -330,7 +317,63 @@ function getTermsFromText(value: string) {
 }
 
 function normalizeSearchTerm(value: string) {
-  return value.toLowerCase().trim();
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function valueMatchesSearch(value: string, searchValue: string) {
+  const normalizedValue = normalizeSearchTerm(value);
+  const normalizedSearchValue = normalizeSearchTerm(searchValue);
+
+  if (!normalizedSearchValue) {
+    return true;
+  }
+
+  return normalizedValue.includes(normalizedSearchValue);
+}
+
+function filterCategoryGroups(groups: CategoryGroup[], searchValue: string) {
+  const normalizedSearchValue = normalizeSearchTerm(searchValue);
+
+  if (!normalizedSearchValue) {
+    return groups;
+  }
+
+  return groups.filter((group) => {
+    const searchableText = [
+      group.name,
+      group.description,
+      ...group.keywords,
+      ...group.subcategories,
+    ].join(" ");
+
+    return valueMatchesSearch(searchableText, searchValue);
+  });
+}
+
+function filterOptions(options: string[], searchValue: string) {
+  return options.filter((option) => valueMatchesSearch(option, searchValue));
+}
+
+function getCategoryGroupHitTerms(group: CategoryGroup, searchValue: string) {
+  const normalizedSearchValue = normalizeSearchTerm(searchValue);
+
+  if (!normalizedSearchValue) {
+    return group.subcategories.slice(0, 4);
+  }
+
+  return [...group.subcategories, ...group.keywords]
+    .filter((item) => valueMatchesSearch(item, searchValue))
+    .slice(0, 5);
 }
 
 function uniqueValues(values: string[]) {
@@ -368,6 +411,9 @@ function getActiveSearchTerms(terms: string[], excludedTerms: string[]) {
 export default function ForCompaniesPage() {
   const [form, setForm] = useState<InquiryForm>(emptyInquiryForm);
   const [excludedSearchTerms, setExcludedSearchTerms] = useState<string[]>([]);
+  const [mainCategorySearch, setMainCategorySearch] = useState("");
+  const [subCategorySearch, setSubCategorySearch] = useState("");
+  const [eventCategorySearch, setEventCategorySearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -394,6 +440,18 @@ export default function ForCompaniesPage() {
 
     return getSubcategoriesForMainCategory(form.mainCategory);
   }, [form.mainCategory]);
+
+  const filteredMainCategoryGroups = useMemo(() => {
+    return filterCategoryGroups(categoryGroups, mainCategorySearch);
+  }, [mainCategorySearch]);
+
+  const filteredSubCategories = useMemo(() => {
+    return filterOptions(availableSubCategories, subCategorySearch);
+  }, [availableSubCategories, subCategorySearch]);
+
+  const filteredEventCategories = useMemo(() => {
+    return filterOptions(eventCategories, eventCategorySearch);
+  }, [eventCategorySearch]);
 
   const selectedCompanyPackage = companyPackages.find(
     (item) => item.value === form.desiredPlan
@@ -453,6 +511,9 @@ export default function ForCompaniesPage() {
     }));
 
     setExcludedSearchTerms([]);
+    setMainCategorySearch("");
+    setSubCategorySearch("");
+    setEventCategorySearch("");
   }
 
   function updateCompanyPlan(plan: string) {
@@ -479,6 +540,7 @@ export default function ForCompaniesPage() {
       subCategories: [],
     }));
 
+    setSubCategorySearch("");
     setExcludedSearchTerms([]);
   }
 
@@ -567,6 +629,11 @@ export default function ForCompaniesPage() {
       setErrorMessage(
         "Bitte gib eine vollständige Adresse ein, damit Locario den Ort automatisch erkennen kann. Format: Strasse Hausnummer, PLZ Ort."
       );
+      return;
+    }
+
+    if (!isEventRequest && !form.mainCategory.trim()) {
+      setErrorMessage("Bitte wähle eine Hauptkategorie aus.");
       return;
     }
 
@@ -1279,18 +1346,15 @@ export default function ForCompaniesPage() {
                 {isEventRequest && (
                   <>
                     <div className="grid gap-5 md:grid-cols-2">
-                      <SelectField
-                        label="Event-Kategorie"
+                      <EventCategoryPicker
                         value={form.eventCategory}
+                        searchValue={eventCategorySearch}
+                        options={filteredEventCategories}
+                        onSearchChange={setEventCategorySearch}
                         onChange={(value) => {
                           updateField("eventCategory", value);
                           setExcludedSearchTerms([]);
                         }}
-                        options={eventCategories.map((category) => ({
-                          value: category,
-                          label: category,
-                        }))}
-                        required
                       />
 
                       <InputField
@@ -1315,31 +1379,18 @@ export default function ForCompaniesPage() {
 
                 {!isEventRequest && (
                   <>
-                    <SelectField
-                      label="Hauptkategorie"
-                      value={form.mainCategory}
-                      onChange={updateMainCategory}
-                      options={[
-                        { value: "", label: "Hauptkategorie auswählen" },
-                        ...mainCategories.map((category) => ({
-                          value: category,
-                          label: category,
-                        })),
-                      ]}
-                      required
-                    />
-
-                    <MultiSelectField
-                      label="Unterkategorien"
-                      values={form.subCategories}
-                      options={availableSubCategories}
-                      disabled={!form.mainCategory}
-                      emptyMessage={
-                        form.mainCategory
-                          ? "Keine Unterkategorien vorhanden."
-                          : "Wähle zuerst eine Hauptkategorie."
-                      }
-                      onToggle={toggleSubCategory}
+                    <CategorySelectionCard
+                      mainCategory={form.mainCategory}
+                      subCategories={form.subCategories}
+                      categorySearch={mainCategorySearch}
+                      subCategorySearch={subCategorySearch}
+                      filteredGroups={filteredMainCategoryGroups}
+                      availableSubCategories={availableSubCategories}
+                      filteredSubCategories={filteredSubCategories}
+                      onSearchChange={setMainCategorySearch}
+                      onSubCategorySearchChange={setSubCategorySearch}
+                      onSelectMainCategory={updateMainCategory}
+                      onToggleSubCategory={toggleSubCategory}
                     />
                   </>
                 )}
@@ -1855,6 +1906,294 @@ function SearchPreviewCard({
   );
 }
 
+function CategorySelectionCard({
+  mainCategory,
+  subCategories,
+  categorySearch,
+  subCategorySearch,
+  filteredGroups,
+  availableSubCategories,
+  filteredSubCategories,
+  onSearchChange,
+  onSubCategorySearchChange,
+  onSelectMainCategory,
+  onToggleSubCategory,
+}: {
+  mainCategory: string;
+  subCategories: string[];
+  categorySearch: string;
+  subCategorySearch: string;
+  filteredGroups: CategoryGroup[];
+  availableSubCategories: string[];
+  filteredSubCategories: string[];
+  onSearchChange: (value: string) => void;
+  onSubCategorySearchChange: (value: string) => void;
+  onSelectMainCategory: (value: string) => void;
+  onToggleSubCategory: (value: string) => void;
+}) {
+  const selectedGroup = categoryGroups.find((group) => group.name === mainCategory);
+
+  return (
+    <div className="rounded-3xl border border-cyan-300/20 bg-cyan-300/10 p-5 shadow-xl shadow-cyan-950/10">
+      <div>
+        <label className="text-lg font-black text-cyan-100">
+          Kategorie & Leistungen
+        </label>
+
+        <p className="mt-2 text-sm leading-6 text-slate-300">
+          Suche nach Branche, Leistung oder Alltagssprache. Die Auswahl steuert
+          später Tags, Suchbegriffe und die Trefferqualität in der Locario-Suche.
+        </p>
+      </div>
+
+      <div className="mt-5">
+        <CategorySearchInput
+          label="Hauptkategorie suchen"
+          value={categorySearch}
+          onChange={onSearchChange}
+          placeholder="Zum Beispiel: Garage, Heizung, Garten, Restaurant, Reinigung..."
+        />
+      </div>
+
+      <div className="mt-4 grid max-h-[28rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+        {filteredGroups.map((group) => {
+          const isSelected = mainCategory === group.name;
+          const hitTerms = getCategoryGroupHitTerms(group, categorySearch);
+
+          return (
+            <button
+              key={group.name}
+              type="button"
+              onClick={() => onSelectMainCategory(group.name)}
+              className={`rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 ${
+                isSelected
+                  ? "border-cyan-300/60 bg-cyan-300/20 text-cyan-100"
+                  : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-cyan-300/30 hover:bg-white/10"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-black text-white">{group.name}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    {group.description}
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-black ${
+                    isSelected
+                      ? "bg-cyan-300 text-slate-950"
+                      : "border border-white/10 text-slate-400"
+                  }`}
+                >
+                  {isSelected ? "✓" : "+"}
+                </span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {hitTerms.map((term) => (
+                  <span
+                    key={`${group.name}-${term}`}
+                    className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs text-slate-300"
+                  >
+                    {term}
+                  </span>
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {filteredGroups.length === 0 && (
+        <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+          Keine Hauptkategorie gefunden. Versuche einen allgemeineren Begriff
+          oder nutze unten die Zusatzlabels für Spezialbegriffe.
+        </p>
+      )}
+
+      <div className="mt-6 rounded-3xl border border-white/10 bg-slate-950/50 p-5">
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+          <div>
+            <p className="font-black text-white">Unterkategorien</p>
+            <p className="mt-1 text-sm text-slate-400">
+              Wähle eine oder mehrere konkrete Leistungen. Die erste Auswahl wird
+              als Hauptleistung gespeichert.
+            </p>
+          </div>
+
+          {mainCategory && (
+            <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-black text-cyan-100">
+              {mainCategory}
+            </span>
+          )}
+        </div>
+
+        {!mainCategory && (
+          <p className="mt-4 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+            Wähle zuerst eine Hauptkategorie aus.
+          </p>
+        )}
+
+        {mainCategory && (
+          <>
+            <div className="mt-4">
+              <CategorySearchInput
+                label="Unterkategorie suchen"
+                value={subCategorySearch}
+                onChange={onSubCategorySearchChange}
+                placeholder="Zum Beispiel: Reifenservice, Boiler, Bäckerei, Endreinigung..."
+              />
+            </div>
+
+            <div className="mt-4 grid max-h-[24rem] gap-3 overflow-y-auto pr-1 md:grid-cols-2">
+              {filteredSubCategories.map((option) => {
+                const isSelected = subCategories.includes(option);
+
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => onToggleSubCategory(option)}
+                    className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                      isSelected
+                        ? "border-emerald-300/50 bg-emerald-300/20 text-emerald-100"
+                        : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-cyan-300/30 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="mr-2">{isSelected ? "✓" : "+"}</span>
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+
+            {filteredSubCategories.length === 0 && (
+              <p className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+                In dieser Hauptkategorie wurde keine passende Unterkategorie
+                gefunden. Suchbegriff ändern oder eine andere Hauptkategorie wählen.
+              </p>
+            )}
+          </>
+        )}
+
+        {subCategories.length > 0 && (
+          <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-200">
+              Ausgewählte Leistungen
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {subCategories.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => onToggleSubCategory(value)}
+                  className="rounded-full bg-emerald-300 px-3 py-1 text-xs font-black text-slate-950 transition hover:bg-emerald-200"
+                  title="Abwählen"
+                >
+                  ✓ {value}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedGroup && availableSubCategories.length > 0 && (
+          <p className="mt-4 text-xs text-slate-500">
+            {availableSubCategories.length} mögliche Unterkategorien in dieser
+            Hauptkategorie.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EventCategoryPicker({
+  value,
+  searchValue,
+  options,
+  onSearchChange,
+  onChange,
+}: {
+  value: string;
+  searchValue: string;
+  options: string[];
+  onSearchChange: (value: string) => void;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="text-sm font-bold text-slate-200">Event-Kategorie</label>
+
+      <div className="mt-2 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+        <CategorySearchInput
+          label="Kategorie suchen"
+          value={searchValue}
+          onChange={onSearchChange}
+          placeholder="Zum Beispiel: Konzert, Markt, Familie, Kultur..."
+        />
+
+        <div className="mt-4 grid max-h-64 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
+          {options.map((option) => {
+            const isSelected = value === option;
+
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange(option)}
+                className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                  isSelected
+                    ? "border-amber-300/50 bg-amber-300/20 text-amber-100"
+                    : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-amber-300/30 hover:bg-white/10"
+                }`}
+              >
+                <span className="mr-2">{isSelected ? "✓" : "+"}</span>
+                {option}
+              </button>
+            );
+          })}
+        </div>
+
+        {options.length === 0 && (
+          <p className="mt-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm text-slate-400">
+            Keine Event-Kategorie gefunden.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CategorySearchInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div>
+      <label className="text-xs font-black uppercase tracking-wide text-slate-500">
+        {label}
+      </label>
+
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none placeholder:text-slate-500 focus:border-cyan-300"
+      />
+    </div>
+  );
+}
+
 function InputField({
   label,
   value,
@@ -1953,72 +2292,6 @@ function SelectField({
           </option>
         ))}
       </select>
-    </div>
-  );
-}
-
-function MultiSelectField({
-  label,
-  values,
-  options,
-  disabled,
-  emptyMessage,
-  onToggle,
-}: {
-  label: string;
-  values: string[];
-  options: string[];
-  disabled: boolean;
-  emptyMessage: string;
-  onToggle: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="text-sm font-bold text-slate-200">{label}</label>
-
-      <div className="mt-2 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
-        {options.length === 0 && (
-          <p className="text-sm text-slate-400">{emptyMessage}</p>
-        )}
-
-        {options.length > 0 && (
-          <div className="grid gap-3 md:grid-cols-2">
-            {options.map((option) => {
-              const isSelected = values.includes(option);
-
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onToggle(option)}
-                  className={`rounded-2xl border px-4 py-3 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                    isSelected
-                      ? "border-cyan-300/50 bg-cyan-300/20 text-cyan-100"
-                      : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-cyan-300/30 hover:bg-white/10"
-                  }`}
-                >
-                  <span className="mr-2">{isSelected ? "✓" : "+"}</span>
-                  {option}
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {values.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {values.map((value) => (
-              <span
-                key={value}
-                className="rounded-full bg-cyan-300 px-3 py-1 text-xs font-black text-slate-950"
-              >
-                {value}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
