@@ -7,6 +7,37 @@ import type { Lead } from "@/types/lead";
 type DrawerMode = "closed" | "details";
 type InboxView = "open" | "new" | "in_progress" | "done" | "all";
 
+type LocationAwareLead = Lead & {
+  companyBaseName?: string;
+  companyDisplayName?: string;
+  companyLocationName?: string;
+  companyCity?: string;
+  companyAddress?: string;
+  companyParentCompanyId?: string;
+  companyParentName?: string;
+  companyParentLocationName?: string;
+  companyRelationLabel?: string;
+  company?: {
+    name?: string;
+    locationName?: string;
+    city?: string;
+    address?: string;
+    adress?: string;
+    parentCompany?: {
+      id?: string;
+      name?: string;
+      locationName?: string;
+      city?: string;
+    } | null;
+    locations?: {
+      id: string;
+      name: string;
+      locationName?: string;
+      city?: string;
+    }[];
+  };
+};
+
 const leadsPerPage = 25;
 
 const inboxViews: {
@@ -88,6 +119,103 @@ function getLeadStatusClassName(status: string) {
   return "border-slate-300/20 bg-slate-300/10 text-slate-300";
 }
 
+function getSafeString(value: unknown, fallback = "") {
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  return fallback;
+}
+
+function normalizeValue(value: unknown) {
+  return getSafeString(value)
+    .toLowerCase()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function valueAlreadyContainsCity(value: string, city: string) {
+  const normalizedValue = normalizeValue(value);
+  const normalizedCity = normalizeValue(city);
+
+  if (!normalizedValue || !normalizedCity) {
+    return false;
+  }
+
+  return normalizedValue.includes(normalizedCity);
+}
+
+function getLeadCompanyDisplayName(lead: LocationAwareLead) {
+  const displayName = getSafeString(lead.companyDisplayName);
+
+  if (displayName) {
+    return displayName;
+  }
+
+  const companyName = getSafeString(lead.companyName || lead.company?.name);
+  const locationName = getSafeString(
+    lead.companyLocationName || lead.company?.locationName
+  );
+
+  if (companyName && locationName) {
+    return `${companyName} · ${locationName}`;
+  }
+
+  return companyName || "Firma offen";
+}
+
+function getLeadCompanyRelationLabel(lead: LocationAwareLead) {
+  const relationLabel = getSafeString(lead.companyRelationLabel);
+
+  if (relationLabel) {
+    return relationLabel;
+  }
+
+  const parentName = getSafeString(
+    lead.companyParentName || lead.company?.parentCompany?.name
+  );
+  const parentLocationName = getSafeString(
+    lead.companyParentLocationName || lead.company?.parentCompany?.locationName
+  );
+
+  if (parentName) {
+    return `Standort von ${
+      parentLocationName ? `${parentName} · ${parentLocationName}` : parentName
+    }`;
+  }
+
+  const locationCount = lead.company?.locations?.length ?? 0;
+
+  if (locationCount > 0) {
+    return `${locationCount} Standort${locationCount === 1 ? "" : "e"}`;
+  }
+
+  return "";
+}
+
+function getLeadCompanyLocationLine(lead: LocationAwareLead) {
+  const city = getSafeString(lead.companyCity || lead.company?.city);
+  const address = getSafeString(
+    lead.companyAddress || lead.company?.address || lead.company?.adress
+  );
+
+  if (address && city && !valueAlreadyContainsCity(address, city)) {
+    return `${address}, ${city}`;
+  }
+
+  return address || city || "Ort offen";
+}
+
 function getStatusRank(status: string) {
   if (status === "new") {
     return 1;
@@ -104,9 +232,14 @@ function getStatusRank(status: string) {
   return 4;
 }
 
-function getLeadSearchText(lead: Lead) {
+function getLeadSearchText(lead: LocationAwareLead) {
   return [
+    getLeadCompanyDisplayName(lead),
+    getLeadCompanyRelationLabel(lead),
+    getLeadCompanyLocationLine(lead),
     lead.companyName,
+    lead.companyLocationName,
+    lead.companyParentName,
     lead.customerName,
     lead.customerEmail,
     lead.customerPhone,
@@ -131,7 +264,7 @@ function matchesInboxView(lead: Lead, view: InboxView) {
 }
 
 export default function AdminLeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [leads, setLeads] = useState<LocationAwareLead[]>([]);
 
   const [drawerMode, setDrawerMode] = useState<DrawerMode>("closed");
   const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
@@ -187,7 +320,7 @@ export default function AdminLeadsPage() {
 
   const companyOptions = useMemo(() => {
     const companyNames = leads
-      .map((lead) => lead.companyName)
+      .map(getLeadCompanyDisplayName)
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b));
 
@@ -204,7 +337,7 @@ export default function AdminLeadsPage() {
           getLeadSearchText(lead).includes(normalizedSearchQuery);
 
         const matchesCompany =
-          !selectedCompany || lead.companyName === selectedCompany;
+          !selectedCompany || getLeadCompanyDisplayName(lead) === selectedCompany;
 
         return (
           matchesSearch &&
@@ -251,7 +384,7 @@ export default function AdminLeadsPage() {
         throw new Error("Leads konnten nicht geladen werden.");
       }
 
-      const data = (await response.json()) as Lead[];
+      const data = (await response.json()) as LocationAwareLead[];
       setLeads(data);
     } catch {
       setErrorMessage(
@@ -286,7 +419,7 @@ export default function AdminLeadsPage() {
         );
       }
 
-      const updatedLead = (await response.json()) as Lead;
+      const updatedLead = (await response.json()) as LocationAwareLead;
 
       setLeads((currentLeads) =>
         currentLeads.map((lead) =>
@@ -552,9 +685,19 @@ export default function AdminLeadsPage() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-300">
-                        {lead.companyName}
+                      <p className="mt-2 text-sm font-semibold text-slate-300">
+                        {getLeadCompanyDisplayName(lead)}
                       </p>
+
+                      <p className="mt-1 text-xs text-slate-500">
+                        {getLeadCompanyLocationLine(lead)}
+                      </p>
+
+                      {getLeadCompanyRelationLabel(lead) && (
+                        <p className="mt-2 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-black text-cyan-100">
+                          {getLeadCompanyRelationLabel(lead)}
+                        </p>
+                      )}
 
                       {lead.sourceQuery && (
                         <p className="mt-2 text-xs font-bold text-cyan-100">
@@ -725,7 +868,7 @@ function LeadDrawer({
 
               <p className="mt-3 max-w-2xl text-slate-400">
                 Eingegangen am {formatDate(lead.createdAt)} für{" "}
-                {lead.companyName}.
+                {getLeadCompanyDisplayName(lead)}.
               </p>
             </div>
 
@@ -831,7 +974,8 @@ function LeadDrawer({
 
             <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2">
-                <DetailBox title="Firma" value={lead.companyName} />
+                <DetailBox title="Firma" value={getLeadCompanyDisplayName(lead)} />
+                <DetailBox title="Standort" value={getLeadCompanyLocationLine(lead)} />
                 <DetailBox title="Kunde" value={lead.customerName} />
                 <DetailBox
                   title="E-Mail"
@@ -843,6 +987,10 @@ function LeadDrawer({
                 />
                 <DetailBox title="Status" value={getLeadStatusLabel(lead.status)} />
                 <DetailBox title="Eingang" value={formatDate(lead.createdAt)} />
+                <DetailBox
+                  title="Struktur"
+                  value={getLeadCompanyRelationLabel(lead) || "Keine Verknüpfung"}
+                />
               </div>
 
               {lead.sourceQuery && (

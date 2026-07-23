@@ -21,6 +21,59 @@ type PartnerProfileRequestBody = {
   };
 };
 
+type PartnerCompanyLocation = {
+  id: string;
+  name: string;
+  locationName: string | null;
+  city: string;
+  adress: string | null;
+};
+
+type PartnerCompany = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  accessToken: string | null;
+  plan: string;
+  parentCompanyId: string | null;
+  locationName: string | null;
+  parentCompany: PartnerCompanyLocation | null;
+  locations: PartnerCompanyLocation[];
+  mainCategory: string;
+  subCategory: string;
+  subCategories: string;
+  category: string;
+  city: string;
+  adress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  description: string;
+  tags: string;
+  searchTerms: string;
+  createdAt: Date;
+  updatedAt: Date;
+  ad: {
+    title: string;
+    description: string;
+    cta: string;
+  } | null;
+  leads: {
+    id: string;
+    companyId: string;
+    customerName: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+    message: string;
+    sourceQuery: string | null;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }[];
+};
+
 function getSafeString(value: unknown, fallback = "") {
   if (typeof value === "string") {
     return value;
@@ -62,55 +115,67 @@ function parseJsonArray(value: string | null | undefined): string[] {
     .filter(Boolean);
 }
 
-function mapPartnerDashboard(company: {
-  id: string;
+function getCompanyDisplayName(company: {
   name: string;
-  imageUrl: string | null;
-  accessToken: string | null;
-  plan: string;
-  mainCategory: string;
-  subCategory: string;
-  subCategories: string;
-  category: string;
-  city: string;
-  adress: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  phone: string | null;
-  email: string | null;
-  website: string | null;
-  description: string;
-  tags: string;
-  searchTerms: string;
-  createdAt: Date;
-  updatedAt: Date;
-  ad: {
-    title: string;
-    description: string;
-    cta: string;
-  } | null;
-  leads: {
-    id: string;
-    companyId: string;
-    customerName: string;
-    customerEmail: string | null;
-    customerPhone: string | null;
-    message: string;
-    sourceQuery: string | null;
-    status: string;
-    createdAt: Date;
-    updatedAt: Date;
-  }[];
+  locationName: string | null;
 }) {
+  const locationName = company.locationName?.trim();
+
+  if (locationName) {
+    return `${company.name} · ${locationName}`;
+  }
+
+  return company.name;
+}
+
+function getCompanyRelationLabel(company: PartnerCompany) {
+  if (company.parentCompany) {
+    return `Standort von ${getCompanyDisplayName(company.parentCompany)}`;
+  }
+
+  if (company.locations.length > 0) {
+    return `${company.locations.length} Standort${
+      company.locations.length === 1 ? "" : "e"
+    }`;
+  }
+
+  if (company.locationName) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
+}
+
+function mapLocation(location: PartnerCompanyLocation) {
+  return {
+    id: location.id,
+    name: location.name,
+    locationName: location.locationName ?? "",
+    city: location.city,
+    address: location.adress ?? "",
+    adress: location.adress ?? "",
+  };
+}
+
+function mapPartnerDashboard(company: PartnerCompany) {
   const address = company.adress ?? "";
+  const companyDisplayName = getCompanyDisplayName(company);
+  const companyRelationLabel = getCompanyRelationLabel(company);
 
   return {
     company: {
       id: company.id,
       name: company.name,
+      companyName: company.name,
       imageUrl: company.imageUrl ?? "",
       accessToken: company.accessToken ?? "",
       plan: company.plan,
+      parentCompanyId: company.parentCompanyId ?? null,
+      locationName: company.locationName ?? "",
+      parentCompany: company.parentCompany
+        ? mapLocation(company.parentCompany)
+        : null,
+      locations: company.locations.map(mapLocation),
       mainCategory: company.mainCategory,
       subCategory: company.subCategory,
       subCategories: parseJsonArray(company.subCategories),
@@ -139,6 +204,16 @@ function mapPartnerDashboard(company: {
     leads: company.leads.map((lead) => ({
       id: lead.id,
       companyId: lead.companyId,
+      companyName: company.name,
+      companyBaseName: company.name,
+      companyDisplayName,
+      companyLocationName: company.locationName ?? "",
+      companyCity: company.city,
+      companyAddress: address,
+      companyParentCompanyId: company.parentCompanyId ?? "",
+      companyParentName: company.parentCompany?.name ?? "",
+      companyParentLocationName: company.parentCompany?.locationName ?? "",
+      companyRelationLabel,
       customerName: lead.customerName,
       customerEmail: lead.customerEmail ?? "",
       customerPhone: lead.customerPhone ?? "",
@@ -158,6 +233,32 @@ async function findPartnerCompany(accessToken: string) {
     },
     include: {
       ad: true,
+      parentCompany: {
+        select: {
+          id: true,
+          name: true,
+          locationName: true,
+          city: true,
+          adress: true,
+        },
+      },
+      locations: {
+        select: {
+          id: true,
+          name: true,
+          locationName: true,
+          city: true,
+          adress: true,
+        },
+        orderBy: [
+          {
+            city: "asc" as const,
+          },
+          {
+            name: "asc" as const,
+          },
+        ],
+      },
       leads: {
         orderBy: {
           createdAt: "desc",

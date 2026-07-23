@@ -19,6 +19,16 @@ import type { Company } from "@/types/company";
 type PartnerLead = {
   id: string;
   companyId: string;
+  companyName?: string;
+  companyBaseName?: string;
+  companyDisplayName?: string;
+  companyLocationName?: string;
+  companyCity?: string;
+  companyAddress?: string;
+  companyParentCompanyId?: string;
+  companyParentName?: string;
+  companyParentLocationName?: string;
+  companyRelationLabel?: string;
   customerName: string;
   customerEmail: string;
   customerPhone: string;
@@ -163,6 +173,60 @@ function getCompanyName(company: Company) {
   );
 }
 
+function getCompanyLocationName(company: Company) {
+  return getSafeString(company.locationName).trim();
+}
+
+function getCompanyPublicTitle(company: Company) {
+  const companyName = getCompanyName(company);
+  const locationName = getCompanyLocationName(company);
+
+  if (locationName) {
+    return `${companyName} · ${locationName}`;
+  }
+
+  return companyName;
+}
+
+function getRelatedCompanyDisplayName(company: {
+  name: string;
+  locationName?: string | null;
+}) {
+  const locationName = getSafeString(company.locationName).trim();
+
+  if (locationName) {
+    return `${company.name} · ${locationName}`;
+  }
+
+  return company.name;
+}
+
+function getCompanyRelationLabel(company: Company) {
+  if (company.parentCompany) {
+    return `Standort von ${getRelatedCompanyDisplayName(company.parentCompany)}`;
+  }
+
+  if (company.locations && company.locations.length > 0) {
+    return `${company.locations.length} Standort${
+      company.locations.length === 1 ? "" : "e"
+    }`;
+  }
+
+  if (getCompanyLocationName(company)) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
+}
+
+function getLeadCompanyDisplayName(lead: PartnerLead, company: Company) {
+  return getSafeString(lead.companyDisplayName) || getCompanyPublicTitle(company);
+}
+
+function getLeadCompanyRelationLabel(lead: PartnerLead, company: Company) {
+  return getSafeString(lead.companyRelationLabel) || getCompanyRelationLabel(company);
+}
+
 function getCompanyAddress(company: Company) {
   const safeCompany = company as CompanyWithAddress;
 
@@ -286,6 +350,10 @@ function getPlanBadgeClassName(plan: string | undefined) {
 function getLeadSearchText(lead: PartnerLead) {
   return normalizeText(
     [
+      lead.companyDisplayName,
+      lead.companyLocationName,
+      lead.companyParentName,
+      lead.companyRelationLabel,
       lead.customerName,
       lead.customerEmail,
       lead.customerPhone,
@@ -693,6 +761,9 @@ export default function PartnerDashboardPage({
   }
 
   const companyName = getCompanyName(company);
+  const companyPublicTitle = getCompanyPublicTitle(company);
+  const companyLocationName = getCompanyLocationName(company);
+  const companyRelationLabel = getCompanyRelationLabel(company);
   const companyLocationLine = getCompanyLocationLine(company);
   const companyAddress = getCompanyAddress(company);
   const displayedMainCategory = getDisplayedMainCategory(company);
@@ -716,12 +787,22 @@ export default function PartnerDashboardPage({
             </div>
 
             <h1 className="mt-6 max-w-5xl break-words text-5xl font-black tracking-tight md:text-7xl">
-              {companyName}
+              {companyPublicTitle}
             </h1>
 
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <span className="max-w-full rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-black text-slate-200">
                 📍 {companyLocationLine}
+              </span>
+
+              {companyLocationName && (
+                <span className="max-w-full rounded-full border border-blue-300/20 bg-blue-300/10 px-4 py-2 text-sm font-black text-blue-100">
+                  {companyLocationName}
+                </span>
+              )}
+
+              <span className="max-w-full rounded-full border border-emerald-300/20 bg-emerald-300/10 px-4 py-2 text-sm font-black text-emerald-100">
+                {companyRelationLabel}
               </span>
 
               <span
@@ -865,6 +946,13 @@ export default function PartnerDashboardPage({
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <InfoBox
+                title="Standort"
+                value={companyLocationName || "Nicht angegeben"}
+              />
+
+              <InfoBox title="Struktur" value={companyRelationLabel} />
+
               <InfoBox title="Ort" value={company.city || "Nicht angegeben"} />
 
               <InfoBox
@@ -891,6 +979,38 @@ export default function PartnerDashboardPage({
 
               <InfoBox title="Paket" value={planLabel} />
             </div>
+
+            {(company.parentCompany || (company.locations && company.locations.length > 0)) && (
+              <div className="mt-6 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-5">
+                <p className="text-xs font-black uppercase tracking-wide text-emerald-200">
+                  Standortstruktur
+                </p>
+
+                {company.parentCompany && (
+                  <p className="mt-3 text-sm text-slate-200">
+                    Dieser Zugang gehört zu einem Standort von{" "}
+                    <span className="font-black text-white">
+                      {getRelatedCompanyDisplayName(company.parentCompany)}
+                    </span>
+                    .
+                  </p>
+                )}
+
+                {company.locations && company.locations.length > 0 && (
+                  <div className="mt-4 grid gap-2">
+                    {company.locations.map((location) => (
+                      <Link
+                        key={location.id}
+                        href={`/firmen/${location.id}`}
+                        className="rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm font-bold text-white transition hover:border-emerald-300/30 hover:bg-white/[0.06]"
+                      >
+                        {getRelatedCompanyDisplayName(location)} · {location.city}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {publicWebsiteHref && (
               <a
@@ -1094,7 +1214,7 @@ export default function PartnerDashboardPage({
               </h2>
 
               <p className="mt-3 text-slate-400">
-                Diese Anfragen wurden über dein Locario-Firmenprofil gesendet.
+                Diese Anfragen wurden über dieses Locario-Firmenprofil gesendet. Bei Filialen gehören die Leads genau zu diesem Standort.
               </p>
             </div>
 
@@ -1188,6 +1308,14 @@ export default function PartnerDashboardPage({
 
                         <p className="mt-2 text-sm text-slate-400">
                           {formatDateTime(lead.createdAt)}
+                        </p>
+
+                        <p className="mt-2 text-sm font-black text-cyan-100">
+                          Anfrage an: {getLeadCompanyDisplayName(lead, company)}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-500">
+                          {getLeadCompanyRelationLabel(lead, company)}
                         </p>
                       </div>
 

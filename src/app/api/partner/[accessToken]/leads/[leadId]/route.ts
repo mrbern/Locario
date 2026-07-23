@@ -15,6 +15,29 @@ type UpdateLeadRequestBody = {
 const allowedStatuses = ["new", "in_progress", "done"] as const;
 type LeadStatus = (typeof allowedStatuses)[number];
 
+type PartnerCompany = {
+  id: string;
+  name: string;
+  locationName: string | null;
+  parentCompanyId: string | null;
+  city: string;
+  adress: string | null;
+  parentCompany: {
+    id: string;
+    name: string;
+    locationName: string | null;
+    city: string;
+    adress: string | null;
+  } | null;
+  locations: {
+    id: string;
+    name: string;
+    locationName: string | null;
+    city: string;
+    adress: string | null;
+  }[];
+};
+
 function isAllowedLeadStatus(value: unknown): value is LeadStatus {
   return (
     typeof value === "string" &&
@@ -22,21 +45,65 @@ function isAllowedLeadStatus(value: unknown): value is LeadStatus {
   );
 }
 
-function mapLead(lead: {
-  id: string;
-  companyId: string;
-  customerName: string;
-  customerEmail: string | null;
-  customerPhone: string | null;
-  message: string;
-  sourceQuery: string | null;
-  status: string;
-  createdAt: Date;
-  updatedAt: Date;
+function getCompanyDisplayName(company: {
+  name: string;
+  locationName: string | null;
 }) {
+  const locationName = company.locationName?.trim();
+
+  if (locationName) {
+    return `${company.name} · ${locationName}`;
+  }
+
+  return company.name;
+}
+
+function getCompanyRelationLabel(company: PartnerCompany) {
+  if (company.parentCompany) {
+    return `Standort von ${getCompanyDisplayName(company.parentCompany)}`;
+  }
+
+  if (company.locations.length > 0) {
+    return `${company.locations.length} Standort${
+      company.locations.length === 1 ? "" : "e"
+    }`;
+  }
+
+  if (company.locationName) {
+    return "Hauptsitz / Einzelstandort";
+  }
+
+  return "Einzelstandort";
+}
+
+function mapLead(
+  lead: {
+    id: string;
+    companyId: string;
+    customerName: string;
+    customerEmail: string | null;
+    customerPhone: string | null;
+    message: string;
+    sourceQuery: string | null;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  company: PartnerCompany
+) {
   return {
     id: lead.id,
     companyId: lead.companyId,
+    companyName: company.name,
+    companyBaseName: company.name,
+    companyDisplayName: getCompanyDisplayName(company),
+    companyLocationName: company.locationName ?? "",
+    companyCity: company.city,
+    companyAddress: company.adress ?? "",
+    companyParentCompanyId: company.parentCompanyId ?? "",
+    companyParentName: company.parentCompany?.name ?? "",
+    companyParentLocationName: company.parentCompany?.locationName ?? "",
+    companyRelationLabel: getCompanyRelationLabel(company),
     customerName: lead.customerName,
     customerEmail: lead.customerEmail ?? "",
     customerPhone: lead.customerPhone ?? "",
@@ -96,6 +163,29 @@ export async function PUT(request: Request, context: RouteContext) {
     },
     select: {
       id: true,
+      name: true,
+      locationName: true,
+      parentCompanyId: true,
+      city: true,
+      adress: true,
+      parentCompany: {
+        select: {
+          id: true,
+          name: true,
+          locationName: true,
+          city: true,
+          adress: true,
+        },
+      },
+      locations: {
+        select: {
+          id: true,
+          name: true,
+          locationName: true,
+          city: true,
+          adress: true,
+        },
+      },
     },
   });
 
@@ -140,5 +230,5 @@ export async function PUT(request: Request, context: RouteContext) {
     },
   });
 
-  return NextResponse.json(mapLead(updatedLead));
+  return NextResponse.json(mapLead(updatedLead, company));
 }

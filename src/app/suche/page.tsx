@@ -68,8 +68,102 @@ function uniqueDisplayValues(values: string[]) {
   return uniqueValues;
 }
 
+function normalizeSearchText(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function getSearchWords(value: string) {
+  return normalizeSearchText(value)
+    .split(" ")
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function queryLooksLikeNaturalLanguage(value: string) {
+  const normalizedValue = normalizeSearchText(value);
+  const words = getSearchWords(value);
+
+  if (!normalizedValue) {
+    return false;
+  }
+
+  const naturalLanguageSignals = [
+    "ich brauche jemanden",
+    "ich suche jemanden",
+    "suche jemanden",
+    "wer kann",
+    "wo finde",
+    "wo gibt",
+    "macht probleme",
+    "macht geraeusche",
+    "komische geraeusche",
+    "funktioniert nicht",
+    "ist kaputt",
+    "kaputt",
+    "defekt",
+    "problem",
+    "probleme",
+    "stoerung",
+    "störung",
+    "reparieren lassen",
+    "neu machen",
+    "machen lassen",
+    "brauche hilfe",
+    "hilfe bei",
+  ];
+
+  if (naturalLanguageSignals.some((signal) => normalizedValue.includes(signal))) {
+    return true;
+  }
+
+  if (value.includes("?")) {
+    return true;
+  }
+
+  return words.length >= 7;
+}
+
+function hasWeakPreliminaryResults(results: UnifiedSearchResult[]) {
+  if (results.length === 0) {
+    return true;
+  }
+
+  const bestScore = Math.max(
+    ...results.map((result) => result.score.totalScore)
+  );
+
+  return bestScore < 45;
+}
+
+function shouldUseSemanticInterpretation({
+  query,
+  preliminaryResults,
+}: {
+  query: string;
+  preliminaryResults: UnifiedSearchResult[];
+}) {
+  if (queryLooksLikeNaturalLanguage(query)) {
+    return true;
+  }
+
+  return hasWeakPreliminaryResults(preliminaryResults);
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
+  const [interpretedQuery, setInterpretedQuery] = useState("");
+  const [aiSearchMessage, setAiSearchMessage] = useState("");
+  const [isInterpretingSearch, setIsInterpretingSearch] = useState(false);
   const [initialUrlQuery, setInitialUrlQuery] = useState("");
   const [databaseCompanies, setDatabaseCompanies] = useState<Company[]>([]);
   const [events, setEvents] = useState<LocarioEvent[]>([]);
@@ -123,35 +217,37 @@ export default function SearchPage() {
     return [...demoCompanies, ...databaseCompanies];
   }, [databaseCompanies]);
 
+  const effectiveQuery = interpretedQuery || query;
+
   const searchMeta = useMemo(() => {
     return getSmartSearchMeta({
-      query,
+      query: effectiveQuery,
       companies: allCompanies,
       events,
     });
-  }, [query, allCompanies, events]);
+  }, [effectiveQuery, allCompanies, events]);
 
   const allTypeResults = useMemo(() => {
     return getUnifiedSearchResults({
-      query,
+      query: effectiveQuery,
       companies: allCompanies,
       events,
       userLocation,
       selectedType: "all",
       sortMode,
     });
-  }, [query, allCompanies, events, userLocation, sortMode]);
+  }, [effectiveQuery, allCompanies, events, userLocation, sortMode]);
 
   const searchResults = useMemo(() => {
     return getUnifiedSearchResults({
-      query,
+      query: effectiveQuery,
       companies: allCompanies,
       events,
       userLocation,
       selectedType,
       sortMode,
     });
-  }, [query, allCompanies, events, userLocation, selectedType, sortMode]);
+  }, [effectiveQuery, allCompanies, events, userLocation, selectedType, sortMode]);
 
   const companyResultCount = allTypeResults.filter(
     (result) => result.type === "company"
@@ -245,6 +341,64 @@ export default function SearchPage() {
     }
   }
 
+  async function interpretSearchQuery(
+    searchQuery: string,
+    options: {
+      forceAI?: boolean;
+    } = {}
+  ) {
+    const cleanedQuery = searchQuery.trim();
+
+    if (!cleanedQuery) {
+      return "";
+    }
+
+    try {
+      setIsInterpretingSearch(true);
+      setAiSearchMessage("");
+
+      const response = await fetch("/api/search/interpret", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: cleanedQuery,
+          forceAI: options.forceAI === true,
+        }),
+      });
+
+      if (!response.ok) {
+        return "";
+      }
+
+      const data = (await response.json()) as {
+        expandedQuery?: string;
+        explanation?: string;
+        usedAI?: boolean;
+      };
+
+      const expandedQuery = String(data.expandedQuery ?? "").trim();
+
+      if (expandedQuery && expandedQuery !== cleanedQuery) {
+        setAiSearchMessage(
+          data.explanation ||
+            (data.usedAI
+              ? "KI-Schicht hat die Suche semantisch erweitert."
+              : "Regelbasierte Synonym-Schicht hat die Suche erweitert.")
+        );
+
+        return expandedQuery;
+      }
+
+      return "";
+    } catch {
+      return "";
+    } finally {
+      setIsInterpretingSearch(false);
+    }
+  }
+
   async function saveSearchLog(searchQuery: string, resultCount: number) {
     const cleanedQuery = searchQuery.trim();
 
@@ -293,6 +447,8 @@ export default function SearchPage() {
     const cleanedQuery = searchQuery.trim();
 
     setQuery(searchQuery);
+    setInterpretedQuery("");
+    setAiSearchMessage("");
     setSelectedType("all");
 
     if (!cleanedQuery) {
@@ -306,7 +462,7 @@ export default function SearchPage() {
       `/suche?q=${encodeURIComponent(cleanedQuery)}`
     );
 
-    const matchingResults = getUnifiedSearchResults({
+    const preliminaryResults = getUnifiedSearchResults({
       query: cleanedQuery,
       companies: allCompanies,
       events,
@@ -314,6 +470,34 @@ export default function SearchPage() {
       selectedType: "all",
       sortMode: "relevance",
     });
+
+    const shouldInterpret = shouldUseSemanticInterpretation({
+      query: cleanedQuery,
+      preliminaryResults,
+    });
+
+    const expandedQuery = shouldInterpret
+      ? await interpretSearchQuery(cleanedQuery, {
+          forceAI: hasWeakPreliminaryResults(preliminaryResults),
+        })
+      : "";
+
+    const effectiveSearchQuery = expandedQuery || cleanedQuery;
+
+    if (expandedQuery) {
+      setInterpretedQuery(expandedQuery);
+    }
+
+    const matchingResults = expandedQuery
+      ? getUnifiedSearchResults({
+          query: effectiveSearchQuery,
+          companies: allCompanies,
+          events,
+          userLocation,
+          selectedType: "all",
+          sortMode: "relevance",
+        })
+      : preliminaryResults;
 
     await saveSearchLog(cleanedQuery, matchingResults.length);
   }
@@ -402,8 +586,8 @@ export default function SearchPage() {
 
             <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
               Suche frei nach Produkten, Dienstleistungen, Firmen oder Events.
-              Locario erkennt Begriffe, Orte, Synonyme, Zeiträume und passende
-              regionale Treffer.
+              Locario erkennt Begriffe, Orte, Synonyme, Alltagssprache, Zeiträume
+              und passende regionale Treffer im Kanton Bern.
             </p>
           </div>
 
@@ -497,19 +681,43 @@ export default function SearchPage() {
         >
           <input
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setInterpretedQuery("");
+              setAiSearchMessage("");
+            }}
             className="w-full rounded-[1.5rem] bg-white px-5 py-5 text-lg font-semibold text-slate-950 outline-none placeholder:text-slate-500"
             placeholder="Zum Beispiel: Ich brauche Kies in Wattenwil"
           />
 
           <button
             type="submit"
-            disabled={isSavingSearch}
+            disabled={isSavingSearch || isInterpretingSearch}
             className="mt-2 w-full rounded-[1.5rem] bg-gradient-to-r from-cyan-300 to-cyan-500 px-9 py-5 text-lg font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5 hover:shadow-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-60 md:mt-0 md:w-auto"
           >
-            {isSavingSearch ? "Speichert..." : "Suchen"}
+            {isSavingSearch
+              ? "Speichert..."
+              : isInterpretingSearch
+                ? "Versteht..."
+                : "Suchen"}
           </button>
         </form>
+
+        {(aiSearchMessage || interpretedQuery) && (
+          <div className="mt-6 rounded-3xl border border-emerald-300/20 bg-emerald-300/10 p-5 text-sm text-emerald-100">
+            <p className="font-black">Hybrid-Suche aktiv</p>
+
+            <p className="mt-2 text-slate-200">
+              {aiSearchMessage || "Die Suche wurde semantisch erweitert."}
+            </p>
+
+            {interpretedQuery && interpretedQuery !== query && (
+              <p className="mt-2 break-words text-xs text-emerald-200">
+                Erweiterte Suche: {interpretedQuery}
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="mt-6 flex flex-wrap gap-3">
           {smartSearchExamples.map((example, exampleIndex) => (
