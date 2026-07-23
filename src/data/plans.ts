@@ -17,7 +17,7 @@ export const companyPlans: CompanyPlanOption[] = [
   {
     value: "pilot",
     label: "Pilot",
-    description: "Interner Testkunde / Einführungsphase",
+    description: "Interner Testkunde / nicht öffentliches Sonderpaket",
     publicPlan: false,
     canReceiveLeads: true,
     canEditProfile: true,
@@ -29,7 +29,7 @@ export const companyPlans: CompanyPlanOption[] = [
   {
     value: "starter",
     label: "Starter",
-    description: "Einfaches Firmenprofil ohne Leads und ohne Dashboard",
+    description: "Basis-Sichtbarkeit mit öffentlichem Firmenprofil, Kontakt, Ort und Suchbegriffen",
     publicPlan: true,
     canReceiveLeads: false,
     canEditProfile: false,
@@ -42,7 +42,7 @@ export const companyPlans: CompanyPlanOption[] = [
     value: "pro",
     label: "Pro",
     description:
-      "Firmenprofil, Partner-Dashboard, Leads, Werbeangebot und stärkere Darstellung",
+      "Aktives Business-Paket mit Profil, Partner-Dashboard, Leads, Werbeangebot und stärkerer Darstellung",
     publicPlan: true,
     canReceiveLeads: true,
     canEditProfile: true,
@@ -55,7 +55,7 @@ export const companyPlans: CompanyPlanOption[] = [
     value: "premium",
     label: "Premium",
     description:
-      "Maximale Sichtbarkeit, Partner-Dashboard, Leads und bevorzugte Platzierung",
+      "Maximale regionale Präsenz mit Dashboard, Leads, Werbeangebot und bevorzugter Platzierung",
     publicPlan: true,
     canReceiveLeads: true,
     canEditProfile: true,

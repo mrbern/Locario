@@ -4,30 +4,31 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+
 const searchSuggestions = [
-  "Restaurant Wattenwil",
-  "Events Wochenende",
-  "Bäckerei in der Nähe",
-  "Werkstatt Belp",
-  "Kies kaufen",
-  "Konzert Thun",
+  "Garage Thun",
+  "mein Auto macht komische Geräusche",
+  "Events im Berner Oberland",
+  "Handwerker im Kanton Bern",
+  "Gärtner Burgdorf",
+  "Kinderprogramm Wochenende",
 ];
 
 const userBenefits = [
   {
-    title: "Natürlich suchen",
+    title: "Suchen wie im Alltag",
     description:
-      "Suche wie du sprichst: zum Beispiel „Ich brauche Kies“, „Werkstatt in Wattenwil“ oder „Events am Wochenende“.",
+      "Locario versteht nicht nur Kategorien, sondern auch Alltagssprache: „mein Auto macht Geräusche“, „ich brauche Kies“ oder „Kinderprogramm am Wochenende“.",
   },
   {
-    title: "Regionale Anbieter finden",
+    title: "Region statt Suchchaos",
     description:
-      "Locario zeigt passende lokale Firmen, Dienstleister, Händler und Anbieter aus deiner Region.",
+      "Statt dich durch allgemeine Treffer, alte Websites und zufällige Inserate zu kämpfen, bekommst du regionale Anbieter und Events an einem Ort.",
   },
   {
-    title: "Events entdecken",
+    title: "Firmen und Events zusammen",
     description:
-      "Finde Märkte, Konzerte, Vereinsanlässe, Partys, Kultur, Sport und lokale Highlights.",
+      "Du findest nicht nur Dienstleister und Händler, sondern auch Märkte, Konzerte, Vereinsanlässe und lokale Highlights in deiner Nähe.",
   },
 ];
 
@@ -35,50 +36,68 @@ const businessBenefits = [
   {
     title: "Starter",
     description:
-      "Ein einfaches Firmenprofil für regionale Sichtbarkeit mit Kontaktangaben, Beschreibung und Suchbegriffen.",
+      "Basis-Sichtbarkeit mit öffentlichem Profil, Adresse, Kontaktangaben, Kategorien und Suchbegriffen.",
   },
   {
     title: "Pro",
     description:
-      "Business-Tarif mit Partner-Dashboard, Leadformular, Leadverwaltung und aktiver Werbeanzeige.",
+      "Der aktive Business-Tarif mit Partner-Dashboard, Leadformular, Profilverwaltung und Werbeanzeige.",
   },
   {
     title: "Premium",
     description:
-      "Maximale Präsenz mit bevorzugter Platzierung und stärkster Sichtbarkeit in passenden Treffern.",
+      "Maximale regionale Präsenz mit bevorzugter Platzierung und stärkster Sichtbarkeit in passenden Suchen.",
   },
 ];
 
 const eventBenefits = [
   {
-    title: "Event einreichen",
+    title: "Event bewerben",
     description:
-      "Veranstalter können Events über Locario einreichen und ein passendes Wochenpaket auswählen.",
+      "Veranstalter können Märkte, Konzerte, Vereinsanlässe, Kurse oder lokale Highlights als Event-Anfrage senden.",
   },
   {
-    title: "Admin prüft",
+    title: "Gezielt bewerben",
     description:
-      "Event-Anfragen werden geprüft und können direkt als öffentliches Event erstellt werden.",
+      "Wochenpakete passen zu Events, weil Aufmerksamkeit kurz vor dem Datum am wichtigsten ist.",
   },
   {
-    title: "Regional sichtbar",
+    title: "Regional entdeckt werden",
     description:
-      "Das Event erscheint mit Datum, Ort, Beschreibung, Website und Ticketlink auf der Events-Seite.",
+      "Events erscheinen mit Datum, Ort, Beschreibung, Website und Ticketlink dort, wo Menschen regional suchen.",
   },
 ];
 
 const platformStats = [
   {
-    label: "Firmen",
+    label: "Fokus",
     value: "Regional",
   },
   {
-    label: "Events",
-    value: "Aktuell",
+    label: "Inhalt",
+    value: "Firmen + Events",
   },
   {
     label: "Suche",
     value: "Smart",
+  },
+];
+
+const whyLocarioPoints = [
+  {
+    title: "Nicht einfach noch ein Verzeichnis",
+    description:
+      "Locario soll regionale Nachfrage sichtbar machen: Was suchen Menschen in der Region, welche Firmen passen dazu und wo fehlen noch Angebote?",
+  },
+  {
+    title: "Ergänzung zu Google, nicht Ersatz",
+    description:
+      "Google ist riesig. Locario ist fokussiert: lokale Anbieter, Events, Ortssuche, Synonyme und klare Pakete für regionale Sichtbarkeit.",
+  },
+  {
+    title: "Verkaufbar für Firmen",
+    description:
+      "Firmen erhalten nicht nur einen Eintrag, sondern eine moderne regionale Präsenz mit Suche, Leads, Dashboard und Werbemöglichkeit ab Pro.",
   },
 ];
 
@@ -123,21 +142,21 @@ export default function HomePage() {
           <div className="inline-flex max-w-full items-center gap-3 rounded-full border border-cyan-300/25 bg-cyan-300/10 px-4 py-2 text-sm font-bold text-cyan-100 shadow-lg shadow-cyan-950/30">
             <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-300 shadow-lg shadow-cyan-300/70" />
             <span className="truncate">
-              Lokales Portal für Firmen, Suche und Events
+              Regionale Nachfrage-Plattform für Firmen, Events und lokale Suche
             </span>
           </div>
 
           <h1 className="mt-6 text-4xl font-black tracking-tight sm:text-5xl md:text-7xl">
-            Finde, was in deiner{" "}
+            Suche regional. Finde Anbieter, Events und{" "}
             <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-              Region wichtig ist.
+              konkrete Hilfe.
             </span>
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-300 md:text-lg md:leading-8">
-            Locario verbindet lokale Firmen, regionale Anbieter und Events an
-            einem Ort. Suche direkt nach dem, was du brauchst, oder entdecke
-            neue Angebote und Veranstaltungen in deiner Nähe.
+            Locario bündelt regionale Firmen, lokale Anbieter und Events in einer
+            fokussierten Suche. Menschen suchen wie im Alltag, Firmen werden
+            passend gefunden und regionale Nachfrage wird sichtbar.
           </p>
 
           <form
@@ -148,7 +167,7 @@ export default function HomePage() {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               className="w-full rounded-2xl bg-white px-4 py-4 text-base font-semibold text-slate-950 outline-none placeholder:text-slate-500 md:rounded-3xl md:px-5 md:text-lg"
-              placeholder="Was suchst du? Zum Beispiel: Werkstatt Wattenwil"
+              placeholder="Was suchst du? Zum Beispiel: mein Auto macht Geräusche"
               aria-label="Suchbegriff"
             />
 
@@ -179,9 +198,9 @@ export default function HomePage() {
             href="/firmen"
             eyebrow="Lokale Anbieter"
             title="Firmen finden"
-            description="Entdecke regionale Firmen, Dienstleister, Händler und KMUs. Filtere nach Ort, Kategorie und Suchbegriff."
+            description="Finde regionale Firmen, Dienstleister, Händler und KMUs über Alltagssprache, Ort, Kategorie und Suchbegriff."
             primaryAction="Firmen entdecken"
-            secondaryText="Werkstatt, Bäckerei, Elektriker, Kies, Garage und mehr"
+            secondaryText="Garage, Kies, Gartenbau, Coiffeur, Elektriker, Restaurant und mehr"
             variant="firmen"
           />
 
@@ -189,11 +208,21 @@ export default function HomePage() {
             href="/events"
             eyebrow="Regionale Veranstaltungen"
             title="Events entdecken"
-            description="Finde Konzerte, Märkte, Vereinsanlässe, Partys, Kultur, Sport und lokale Highlights in deiner Umgebung."
+            description="Entdecke Konzerte, Märkte, Vereinsanlässe, Familienprogramm, Kultur, Sport und lokale Highlights in deiner Umgebung."
             primaryAction="Events ansehen"
-            secondaryText="Wochenendtipps, Vereinsfeste, Märkte, Konzerte und mehr"
+            secondaryText="Wochenendtipps, Märkte, Konzerte, Vereine, Familienprogramm und mehr"
             variant="events"
           />
+        </div>
+
+        <div className="mx-auto mt-8 grid w-full max-w-6xl gap-4 md:grid-cols-3">
+          {whyLocarioPoints.map((point, pointIndex) => (
+            <InfoCard
+              key={`${normalizeKey(point.title)}-${pointIndex}`}
+              title={point.title}
+              description={point.description}
+            />
+          ))}
         </div>
       </section>
 
@@ -206,13 +235,13 @@ export default function HomePage() {
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-                Lokal suchen, schneller finden.
+                Warum Locario trotz Google Sinn macht.
               </h2>
 
               <p className="mt-5 text-slate-300">
-                Locario hilft dir, regionale Anbieter und Veranstaltungen
-                einfacher zu entdecken, ohne lange auf verschiedenen Seiten
-                suchen zu müssen.
+                Google und Maps zeigen alles. Locario zeigt das, was regional
+                relevant ist: Anbieter, Events, Orte, Kategorien und echte lokale
+                Nachfrage in einer einfachen Suche.
               </p>
             </div>
 
@@ -245,13 +274,13 @@ export default function HomePage() {
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight">
-              Sichtbar werden, wenn Menschen lokal suchen.
+              Sichtbar werden, wenn Menschen regional Bedarf haben.
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Firmen können auf Locario mit Profil, Kategorien, Bild,
-              Suchbegriffen und je nach Paket mit Leads, Dashboard und Werbung
-              sichtbar werden.
+              Firmen werden nicht nur aufgelistet, sondern passend zu regionalen
+              Suchanfragen, Orten, Kategorien und Alltagssprache gefunden. Ab Pro
+              kommen Leads, Partner-Dashboard und Werbeanzeige dazu.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -268,7 +297,7 @@ export default function HomePage() {
               href="/fuer-firmen"
               className="mt-8 inline-flex rounded-3xl bg-gradient-to-r from-cyan-300 to-cyan-500 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:-translate-y-0.5"
             >
-              Firma eintragen
+              Firma sichtbar machen
             </Link>
           </section>
 
@@ -278,12 +307,13 @@ export default function HomePage() {
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight">
-              Events regional bewerben.
+              Events dort sichtbar machen, wo Menschen suchen.
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Veranstalter können Events einreichen. Im Admin werden sie
-              geprüft, angenommen und als öffentliches Event erstellt.
+              Veranstalter können Events einreichen und vor dem Datum gezielt
+              regional sichtbar machen – ideal für Märkte, Konzerte, Vereine,
+              Kultur und Wochenendprogramm.
             </p>
 
             <div className="mt-8 grid gap-4">
@@ -301,7 +331,7 @@ export default function HomePage() {
               href="/fuer-firmen"
               className="mt-8 inline-flex rounded-3xl bg-gradient-to-r from-amber-300 to-orange-400 px-7 py-4 text-center font-black text-slate-950 shadow-lg shadow-amber-500/20 transition hover:-translate-y-0.5"
             >
-              Event einreichen
+              Event bewerben
             </Link>
           </section>
         </section>
@@ -312,13 +342,12 @@ export default function HomePage() {
           </p>
 
           <h2 className="mx-auto mt-4 max-w-4xl text-4xl font-black tracking-tight md:text-5xl">
-            Eine moderne lokale Plattform für Firmen, Events und regionale
-            Sichtbarkeit.
+            Regional suchen, Nachfrage erkennen und lokale Sichtbarkeit verkaufen.
           </h2>
 
           <p className="mx-auto mt-5 max-w-2xl text-slate-300">
-            Suche direkt los, entdecke Anbieter oder bring deine Firma oder dein
-            Event auf Locario.
+            Locario ist die Verbindung aus smarter regionaler Suche, lokaler
+            Event-Sichtbarkeit und verkaufbaren Paketen für KMUs und Veranstalter.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">

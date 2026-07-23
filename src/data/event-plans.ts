@@ -10,21 +10,21 @@ export const eventPlans: EventPlan[] = [
     value: "basic",
     label: "Event Basic",
     price: "CHF 19.– / Woche",
-    description: "Normale Event-Kachel auf der Events-Seite.",
+    description: "Normale Event-Kachel mit Datum, Ort, Beschreibung und Link.",
   },
   {
     value: "highlight",
     label: "Event Highlight",
     price: "CHF 49.– / Woche",
     description:
-      "Hervorgehobene Darstellung, bessere Sichtbarkeit und stärkere Kachel.",
+      "Hervorgehobene Darstellung für Events, die vor dem Datum mehr regionale Aufmerksamkeit brauchen.",
   },
   {
     value: "premium",
     label: "Event Premium",
     price: "CHF 99.– / Woche",
     description:
-      "Top-Platzierung, stärkste Darstellung und ideal für wichtige Veranstaltungen.",
+      "Top-Platzierung und stärkste Darstellung für wichtige Veranstaltungen, Märkte und Highlights.",
   },
 ];
 
@@ -37,7 +37,7 @@ export function getEventPlanLabel(plan: string | undefined) {
 export function getEventPlanDescription(plan: string | undefined) {
   const eventPlan = eventPlans.find((item) => item.value === plan);
 
-  return eventPlan?.description || "Normale Event-Kachel auf der Events-Seite.";
+  return eventPlan?.description || "Normale Event-Kachel mit Datum, Ort, Beschreibung und Link.";
 }
 
 export function getEventPlanPrice(plan: string | undefined) {

@@ -76,6 +76,7 @@ const emptyInquiryForm: InquiryForm = {
   message: "",
 };
 
+
 const companyPackages = [
   {
     value: "starter",
@@ -83,7 +84,7 @@ const companyPackages = [
     price: "CHF 49",
     badge: "Basis-Sichtbarkeit",
     description:
-      "Für Firmen, die mit einem einfachen Profil auf Locario sichtbar sein möchten – ohne Leadformular und ohne Partner-Dashboard.",
+      "Für Firmen, die zuerst sauber regional auffindbar sein möchten – mit öffentlichem Profil, Adresse, Kontakt und Suchbegriffen.",
     features: [
       "Firmenprofil auf Locario",
       "Hauptkategorie und Unterkategorien",
@@ -94,7 +95,7 @@ const companyPackages = [
       "Titelbild möglich",
       "Auffindbar in Firmenübersicht und Suche",
     ],
-    note: "Keine Locario-Leads, kein Partner-Dashboard und keine aktive Werbeanzeige enthalten.",
+    note: "Basis-Paket für Sichtbarkeit. Keine Locario-Leads, kein Partner-Dashboard und keine aktive Werbeanzeige enthalten.",
     highlighted: false,
   },
   {
@@ -103,7 +104,7 @@ const companyPackages = [
     price: "CHF 149",
     badge: "Empfohlen",
     description:
-      "Für Firmen, die aktiv Anfragen erhalten, ihr Profil selbst verwalten und mit Angeboten werben möchten.",
+      "Für Firmen, die aus regionaler Sichtbarkeit echte Anfragen machen möchten – mit Leads, Dashboard und Werbeanzeige.",
     features: [
       "Alles aus Starter",
       "Partner-Dashboard",
@@ -116,7 +117,7 @@ const companyPackages = [
       "Bessere Sichtbarkeit als Starter",
       "Pro-Badge auf Locario",
     ],
-    note: "Beste Wahl für aktive Kundengewinnung mit Locario.",
+    note: "Empfohlenes Verkaufspaket für aktive regionale Kundengewinnung mit Locario.",
     highlighted: true,
   },
   {
@@ -125,7 +126,7 @@ const companyPackages = [
     price: "CHF 299",
     badge: "Maximale Präsenz",
     description:
-      "Für Firmen, die maximale regionale Sichtbarkeit, Leadfunktion, Dashboard und bevorzugte Platzierung möchten.",
+      "Für Firmen mit starkem regionalem Werbefokus, mehreren Standorten oder hoher Konkurrenz in der Suche.",
     features: [
       "Alles aus Pro",
       "Premium-Platzierung vor Pro und Starter",
@@ -135,7 +136,7 @@ const companyPackages = [
       "Priorisierte Darstellung",
       "Ideal für stark umkämpfte Branchen",
     ],
-    note: "Für Firmen mit starkem regionalem Werbefokus.",
+    note: "Für Firmen, die Locario aktiv als regionalen Werbe- und Anfragekanal nutzen möchten.",
     highlighted: false,
   },
 ];
@@ -161,61 +162,79 @@ const eventCategories = [
 
 const benefits = [
   {
-    title: "Lokale Sichtbarkeit",
+    title: "Sichtbarkeit bei echter Suche",
     description:
-      "Locario macht regionale Firmen, Anbieter und Events sichtbar, wenn Menschen lokal suchen oder entdecken möchten.",
+      "Locario setzt dort an, wo Menschen konkret etwas brauchen: Anbieter, Hilfe, Produkte, Dienstleistungen oder Events in ihrer Region.",
   },
   {
-    title: "Moderne Darstellung",
+    title: "Mehr als ein Eintrag",
     description:
-      "Firmen und Events erscheinen mit Bild, Beschreibung, Ort, Adresse, Kontakt, Kategorien, Angeboten und klaren Aktionen.",
+      "Profile enthalten Bild, Beschreibung, Ort, Kategorien, Suchbegriffe, Angebote und klare Kontaktmöglichkeiten.",
   },
   {
-    title: "Direkte Nachfrage",
+    title: "Leads ab Pro",
     description:
-      "Firmen erhalten ab Pro direkte Locario-Leads. Veranstalter können Events gezielt vor dem Eventdatum bewerben.",
+      "Pro und Premium machen aus Sichtbarkeit einen Anfragekanal: mit Leadformular, Partner-Dashboard und Profilverwaltung.",
   },
   {
-    title: "Regionale Werbefläche",
+    title: "Einstieg ohne Druck",
     description:
-      "Locario verbindet lokale Suche, Werbung und Event-Sichtbarkeit in einer modernen Plattform.",
+      "Für erste regionale Partner kann im persönlichen Gespräch ein individuelles Launch-Angebot vereinbart werden.",
+  },
+];
+
+const launchOfferBenefits = [
+  {
+    title: "Individuell starten",
+    description:
+      "Die öffentlichen Pakete bleiben klar. Für ausgewählte Startpartner kann Locario den Einstieg persönlich abstimmen.",
+  },
+  {
+    title: "Ohne Druck verkaufen",
+    description:
+      "Im Verkaufsgespräch kannst du zuerst den Nutzen erklären und danach das passende Paket empfehlen.",
+  },
+  {
+    title: "Feedback nutzen",
+    description:
+      "Erste Partner helfen, Kategorien, Suchbegriffe, Angebote und regionale Nachfrage vor dem breiteren Verkauf zu schärfen.",
   },
 ];
 
 const steps = [
   {
-    title: "Bereich wählen",
+    title: "Paket wählen",
     number: "01",
     description:
-      "Entscheide, ob du ein Firmenprofil oder ein Event-Wochenpaket anfragen möchtest.",
+      "Wähle Firmenprofil oder Event-Werbung. Für Firmen ist Pro das empfohlene Verkaufspaket.",
   },
   {
     title: "Angaben erfassen",
     number: "02",
     description:
-      "Trage Firma, Veranstalter, Adresse, Beschreibung, Kontakt und gewünschtes Paket ein.",
+      "Trage Firma, Veranstalter, Adresse, Beschreibung, Kontakt, Kategorie und gewünschtes Paket ein.",
   },
   {
     title: "Prüfung durch Locario",
     number: "03",
     description:
-      "Locario prüft die Angaben und kann dein Profil oder Event anschliessend veröffentlichen.",
+      "Locario prüft die Angaben, ergänzt bei Bedarf Suchbegriffe und kann Profil oder Event veröffentlichen.",
   },
   {
     title: "Sichtbar werden",
     number: "04",
     description:
-      "Firmen werden gefunden, Events werden entdeckt und Werbepakete sorgen für stärkere Präsenz.",
+      "Firmen werden gefunden, Events werden entdeckt und die Suchanalyse zeigt, wonach Menschen regional fragen.",
   },
 ];
 
 const examples = [
-  "Werkstatt Wattenwil",
-  "Bäckerei Wattenwil",
-  "Ich brauche Kies",
-  "Sommerfest Bern",
+  "mein Auto macht Geräusche",
+  "Gärtner Burgdorf",
+  "Handwerker im Kanton Bern",
+  "Events im Berner Oberland",
   "Konzert Thun",
-  "Markt am Wochenende",
+  "Kinderprogramm Wochenende",
 ];
 
 const targetGroups = [
@@ -235,14 +254,14 @@ const targetGroups = [
 
 const faqs = [
   {
-    question: "Ist Locario nur für Firmen?",
+    question: "Ist Locario nur ein weiteres Firmenverzeichnis?",
     answer:
-      "Nein. Locario startet mit Firmenprofilen und Events. Firmen können dauerhaft sichtbar sein, Events können zeitlich begrenzt und wochenweise beworben werden.",
+      "Nein. Locario soll eine regionale Nachfrage-Plattform sein: Nutzer suchen natürlich nach Bedarf, Ort und Events; Firmen werden passend gefunden und Suchanfragen können ausgewertet werden.",
   },
   {
-    question: "Was ist im Starter-Paket enthalten?",
+    question: "Gibt es ein Launch-Angebot?",
     answer:
-      "Starter ist ein einfaches Sichtbarkeitspaket. Die Firma erhält ein öffentliches Profil mit Kontaktangaben, Adresse, Website, Telefon, E-Mail, Kategorien, Beschreibung und automatischen Suchbegriffen. Locario-Leads, Partner-Dashboard und Werbeanzeigen sind erst ab Pro verfügbar.",
+      "Ja, für ausgewählte erste regionale Partner kann im persönlichen Gespräch ein individuelles Launch-Angebot vereinbart werden. Öffentlich bleiben Starter, Pro und Premium die klaren Pakete.",
   },
   {
     question: "Was ist der Unterschied zwischen Starter und Pro?",
@@ -252,7 +271,7 @@ const faqs = [
   {
     question: "Wie funktionieren Event-Wochenpakete?",
     answer:
-      "Events werden für einen begrenzten Zeitraum beworben. Je nach Paket erscheinen sie normal, hervorgehoben oder besonders prominent auf der Events-Seite.",
+      "Events brauchen kurz vor dem Datum Aufmerksamkeit. Deshalb werden sie wochenweise beworben – je nach Paket normal, hervorgehoben oder besonders prominent.",
   },
 ];
 
@@ -747,16 +766,17 @@ export default function ForCompaniesPage() {
             </div>
 
             <h1 className="mt-7 max-w-5xl text-5xl font-black tracking-tight md:text-7xl">
-              Werde lokal sichtbar,{" "}
+              Werde regional sichtbar,{" "}
               <span className="bg-gradient-to-r from-cyan-200 via-white to-blue-200 bg-clip-text text-transparent">
-                wenn Menschen suchen oder entdecken.
+                wenn echte Nachfrage entsteht.
               </span>
             </h1>
 
             <p className="mt-7 max-w-3xl text-lg leading-8 text-slate-300">
-              Locario verbindet regionale Firmen, lokale Anbieter und Events an
-              einem Ort. Starter sorgt für einfache Sichtbarkeit. Ab Pro kommen
-              Leads, Partner-Dashboard und Werbeanzeigen dazu.
+              Locario ist nicht nur ein Eintrag, sondern ein regionaler Such- und
+              Anfragekanal. Firmen werden bei passenden Suchanfragen gefunden,
+              Events werden entdeckt und Firmen können Locario als regionalen
+              Anfragekanal nutzen.
             </p>
 
             <div className="mt-9 flex flex-col gap-4 sm:flex-row">
@@ -778,9 +798,9 @@ export default function ForCompaniesPage() {
             </div>
 
             <div className="mt-10 grid gap-4 sm:grid-cols-3">
-              <HeroStat value="2" label="Bereiche" />
-              <HeroStat value="24/7" label="online sichtbar" />
-              <HeroStat value="7 Tage" label="Eventpakete" />
+              <HeroStat value="Pro" label="empfohlenes Paket" />
+              <HeroStat value="24/7" label="regional sichtbar" />
+              <HeroStat value="7 Tage" label="Event-Wochenpakete" />
             </div>
           </div>
 
@@ -789,11 +809,11 @@ export default function ForCompaniesPage() {
 
             <div className="relative rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
               <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Locario als regionales Portal
+                Locario als verkaufbare Plattform
               </p>
 
               <h2 className="mt-3 text-3xl font-black tracking-tight">
-                Firmen finden. Events entdecken. Regional werben.
+                Nachfrage erkennen. Sichtbarkeit verkaufen. Lokal wachsen.
               </h2>
 
               <div className="mt-6 flex flex-wrap gap-3">
@@ -810,17 +830,17 @@ export default function ForCompaniesPage() {
               <div className="mt-8 grid gap-4">
                 <MiniInfo
                   title="Starter"
-                  description="Einfach sichtbar mit öffentlichem Firmenprofil, Adresse und Kontaktangaben."
+                  description="Basis-Sichtbarkeit mit öffentlichem Profil, Adresse, Kontakt und Suchbegriffen."
                 />
 
                 <MiniInfo
                   title="Pro & Premium"
-                  description="Mit Partner-Dashboard, Leads, Profilbearbeitung und Werbeanzeigen."
+                  description="Mit Partner-Dashboard, Leads, Profilbearbeitung, Werbeanzeige und stärkerer Platzierung."
                 />
 
                 <MiniInfo
-                  title="Events"
-                  description="Zeitlich begrenzte Sichtbarkeit für Veranstaltungen, Märkte, Konzerte und Vereinsanlässe."
+                  title="Launch-Angebot"
+                  description="Für erste regionale Partner kann im Gespräch ein individueller Einstieg vereinbart werden."
                 />
               </div>
             </div>
@@ -842,22 +862,58 @@ export default function ForCompaniesPage() {
           ))}
         </section>
 
+        <section className="mt-20 rounded-[2rem] border border-emerald-300/20 bg-emerald-300/10 p-8 shadow-2xl shadow-emerald-950/20 backdrop-blur-xl md:p-10">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div>
+              <p className="text-sm font-black uppercase tracking-wide text-emerald-200">
+                Launch-Angebot
+              </p>
+
+              <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
+                Pakete klar zeigen, Einstieg flexibel halten.
+              </h2>
+
+              <p className="mt-5 text-slate-300">
+                Öffentlich bleiben Starter, Pro und Premium klar sichtbar. Für
+                ausgewählte erste regionale Partner kann im persönlichen Gespräch
+                ein individuelles Launch-Angebot vereinbart werden.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
+              {launchOfferBenefits.map((benefit) => (
+                <article
+                  key={benefit.title}
+                  className="rounded-3xl border border-emerald-300/20 bg-slate-950/50 p-5"
+                >
+                  <h3 className="text-xl font-black text-emerald-100">
+                    {benefit.title}
+                  </h3>
+
+                  <p className="mt-2 text-sm text-slate-300">
+                    {benefit.description}
+                  </p>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="mt-20 rounded-[2rem] border border-white/10 bg-white/[0.06] p-8 shadow-2xl shadow-slate-950/20 backdrop-blur-xl md:p-10">
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
             <div>
               <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-                Für viele regionale Anbieter
+                Für regionale Anbieter mit lokalem Markt
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-                Locario funktioniert für Firmen, Vereine, Veranstalter und lokale
-                Organisationen.
+                Locario funktioniert für Anbieter, die regional gefunden, kontaktiert
+                oder entdeckt werden wollen.
               </h2>
 
               <p className="mt-5 text-slate-300">
-                Entscheidend ist regionale Relevanz: Wer lokal gefunden,
-                besucht, kontaktiert oder entdeckt werden möchte, kann von
-                Locario profitieren.
+                Entscheidend ist nicht die Firmengrösse, sondern lokale Relevanz:
+                Wer in einer Region Nachfrage bedienen kann, passt zu Locario.
               </p>
             </div>
 
@@ -877,16 +933,16 @@ export default function ForCompaniesPage() {
         <section className="mt-20">
           <div className="max-w-3xl">
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              So funktioniert Locario
+              So funktioniert der Einstieg
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-              Einfacher Ablauf für Sichtbarkeit
+              Vom Profil zur regionalen Sichtbarkeit
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Locario soll einfach bleiben: Bereich wählen, Angaben erfassen,
-              prüfen lassen und regional sichtbar werden.
+              Der Einstieg soll für Firmen einfach sein: Paket wählen, Profil prüfen
+              lassen, regional sichtbar werden und danach mit echten Daten optimieren.
             </p>
           </div>
 
@@ -911,17 +967,17 @@ export default function ForCompaniesPage() {
         <section className="mt-20">
           <div className="max-w-3xl">
             <p className="text-sm font-black uppercase tracking-wide text-cyan-300">
-              Pakete für Firmen
+              Firmenpakete
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-              Sichtbarkeit, Leads und Werbung klar getrennt
+              Starter sichtbar. Pro verkaufbar. Premium dominant.
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Starter ist für einfache Sichtbarkeit. Pro ist der Business-Tarif
-              mit Leads, Dashboard und Werbung. Premium bringt maximale
-              regionale Präsenz.
+              So bleibt das Angebot verständlich: Starter ist der einfache Eintrag.
+              Pro ist das wichtigste Verkaufspaket mit Leads und Dashboard.
+              Premium ist für Firmen, die regional sehr präsent sein wollen.
             </p>
           </div>
 
@@ -957,13 +1013,13 @@ export default function ForCompaniesPage() {
             </p>
 
             <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
-              Wochenpakete für Veranstaltungen
+              Event-Werbung für den richtigen Zeitpunkt
             </h2>
 
             <p className="mt-5 text-slate-300">
-              Events brauchen kurzfristige Aufmerksamkeit. Mit Wochenpaketen
-              können Märkte, Konzerte, Vereinsanlässe, Partys oder lokale
-              Highlights gezielt beworben werden.
+              Events brauchen Aufmerksamkeit vor dem Datum. Wochenpakete machen
+              Sichtbarkeit einfach planbar – für Märkte, Konzerte, Vereinsanlässe,
+              Partys oder lokale Highlights.
             </p>
           </div>
 
@@ -1017,7 +1073,7 @@ export default function ForCompaniesPage() {
           <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
             <div>
               <p className="text-sm font-black uppercase tracking-wide text-cyan-200">
-                Anfrage senden
+                Paket anfragen
               </p>
 
               <h2 className="mt-4 text-4xl font-black tracking-tight md:text-5xl">
@@ -1029,7 +1085,7 @@ export default function ForCompaniesPage() {
               <p className="mt-5 text-slate-300">
                 {isEventRequest
                   ? "Erfasse dein Event mit Veranstalter, Kategorie, Datum, Adresse und gewünschtem Wochenpaket."
-                  : "Je vollständiger deine Angaben sind, desto schneller kann Locario dein Firmenprofil prüfen und veröffentlichen."}
+                  : "Je vollständiger deine Angaben sind, desto schneller kann Locario dein Profil prüfen, Suchbegriffe vorbereiten und den passenden Paketstart abstimmen."}
               </p>
 
               <div className="mt-7 rounded-3xl border border-white/10 bg-slate-950/50 p-6">
@@ -1058,7 +1114,7 @@ export default function ForCompaniesPage() {
                 <p className="mt-3 text-sm text-slate-300">
                   {isEventRequest
                     ? "Event-Anfragen landen neu separat in der Event-Anfrageverwaltung. Locario kann daraus anschliessend ein Event im Admin erstellen und veröffentlichen."
-                    : "Starter enthält kein Leadformular und kein Partner-Dashboard. Wenn du aktive Anfragen und Profilverwaltung möchtest, wähle Pro oder Premium."}
+                    : "Pro ist das wichtigste Verkaufspaket. Starter bleibt bewusst einfach; Leads, Dashboard, Profilverwaltung und Werbeanzeige sind ab Pro enthalten."}
                 </p>
               </div>
             </div>
@@ -1113,7 +1169,7 @@ export default function ForCompaniesPage() {
                     onChange={updateCompanyPlan}
                     options={[
                       { value: "starter", label: "Starter – CHF 49 / Monat" },
-                      { value: "pro", label: "Pro – CHF 149 / Monat" },
+                      { value: "pro", label: "Pro – CHF 149 / Monat – empfohlen" },
                       {
                         value: "premium",
                         label: "Premium – CHF 299 / Monat",
@@ -1431,8 +1487,8 @@ export default function ForCompaniesPage() {
           </p>
 
           <h2 className="mx-auto mt-4 max-w-3xl text-4xl font-black tracking-tight md:text-5xl">
-            Starte mit Locario und mache deine Firma oder dein Event dort
-            sichtbar, wo Menschen lokal suchen.
+            Mache deine Firma oder dein Event dort sichtbar, wo Menschen regional
+            suchen, vergleichen und konkrete Hilfe brauchen.
           </h2>
 
           <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
